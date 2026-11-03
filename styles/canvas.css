@@ -1,0 +1,155 @@
+/*
+ * canvas.css — the infinite canvas, rendered nodes and the screen-space overlay.
+ */
+
+#canvas-viewport {
+  touch-action: none;
+  overscroll-behavior: none;
+  isolation: isolate;
+  cursor: default;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ---------- tool cursors ---------- */
+#canvas-viewport[data-tool='hand'],
+#canvas-viewport.is-space { cursor: grab; }
+#canvas-viewport.is-panning { cursor: grabbing; }
+#canvas-viewport[data-tool='frame'],
+#canvas-viewport[data-tool='rect'],
+#canvas-viewport[data-tool='ellipse'],
+#canvas-viewport[data-tool='image'] { cursor: crosshair; }
+#canvas-viewport[data-tool='text'] { cursor: text; }
+#canvas-viewport.is-space[data-tool] { cursor: grab; }
+
+/* while a gesture runs the cursor stays put, whatever is under the pointer */
+html.f-cursor-lock,
+html.f-cursor-lock * { cursor: var(--f-cursor, default) !important; }
+
+/* ---------- world (holds the real DOM of the design) ---------- */
+#canvas-world {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+  z-index: 0;
+}
+#canvas-world,
+#canvas-world * { cursor: inherit; }
+
+.f-node { -webkit-user-drag: none; }
+img.f-node { -webkit-user-select: none; user-select: none; }
+
+/* inline text editing */
+.f-node.is-editing {
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text !important;
+  outline: none;
+  min-width: 2px;
+  min-height: 1lh;
+  caret-color: var(--accent);
+}
+.f-node.is-editing::selection,
+.f-node.is-editing *::selection { background: rgba(109, 94, 252, 0.28); }
+
+/* drag & drop */
+.f-drag-source { visibility: hidden !important; }
+.f-ghost { pointer-events: none !important; }
+.f-ghost * { pointer-events: none !important; }
+
+/* ---------- overlay (screen space) ---------- */
+#canvas-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
+  font-family: var(--font);
+}
+#canvas-overlay > div {
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  transform-origin: 50% 50%;
+}
+
+.f-ov-target {
+  z-index: 1;
+  border: 1.5px solid var(--accent);
+}
+.f-ov-hover {
+  z-index: 2;
+  border: 1px solid var(--accent);
+}
+.f-ov-sel {
+  z-index: 3;
+  border: 1px solid var(--accent);
+}
+.f-ov-sel.is-editing { border-width: 1px; box-shadow: 0 0 0 1px rgba(109, 94, 252, 0.25); }
+
+.f-ov-line {
+  z-index: 4;
+  background: var(--accent);
+  border-radius: 1px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.85);
+}
+.f-ov-marquee {
+  z-index: 5;
+  border: 1px solid var(--accent);
+  background: rgba(109, 94, 252, 0.08);
+}
+
+.f-ov-label {
+  z-index: 6;
+  height: 18px;
+  padding: 1px 0 0;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  color: #6f6f7a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: auto;
+  cursor: default;
+  letter-spacing: 0.01em;
+  transform-origin: 0 0 !important;
+}
+.f-ov-label.is-hover { color: #3c3c44; }
+.f-ov-label.is-selected { color: var(--accent); }
+.f-ov-label.is-locked { pointer-events: none; }
+
+.f-ov-badge {
+  z-index: 7;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  line-height: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.f-ov-handle {
+  z-index: 8;
+  width: 8px;
+  height: 8px;
+  background: #fff;
+  border: 1px solid var(--accent);
+  border-radius: 1px;
+  pointer-events: auto;
+  box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.6);
+}
+/* a slightly larger invisible hit area makes handles easy to grab */
+.f-ov-handle::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}

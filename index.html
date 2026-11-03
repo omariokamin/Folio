@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Folio — design in real HTML &amp; CSS</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%236d5efc'/><path d='M10 9h12v4H14v3h7v4h-7v5h-4z' fill='white'/></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=JetBrains+Mono:wght@400;500&display=swap" />
+
+  <link rel="stylesheet" href="styles/base.css" />
+  <link rel="stylesheet" href="styles/canvas.css" />
+  <link rel="stylesheet" href="styles/inspector.css" />
+  <link rel="stylesheet" href="styles/shell.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="toolbar"></header>
+    <aside id="left-panel"><div id="layers"></div></aside>
+    <main id="canvas-viewport">
+      <div id="canvas-world"></div>
+      <div id="canvas-overlay"></div>
+    </main>
+    <aside id="right-panel"><div id="inspector"></div></aside>
+    <section id="code-panel" hidden></section>
+  </div>
+  <div id="toast-root"></div>
+
+  <!-- PNG export library (turns real DOM into an image) -->
+  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+
+  <!-- Folio. Order matters: each file adds a piece to window.Folio. -->
+  <script src="src/state.js"></script>
+  <script src="src/css.js"></script>
+  <script src="src/fonts.js"></script>
+  <script src="src/ui.js"></script>
+  <script src="src/icons.js"></script>
+  <script src="src/render.js"></script>
+  <script src="src/overlay.js"></script>
+  <script src="src/canvas.js"></script>
+  <script src="src/inspector.js"></script>
+  <script src="src/layers.js"></script>
+  <script src="src/toolbar.js"></script>
+  <script src="src/export.js"></script>
+  <script src="src/shortcuts.js"></script>
+  <script src="src/demo.js"></script>
+  <script src="src/main.js"></script>
+</body>
+</html>

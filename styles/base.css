@@ -1,0 +1,137 @@
+/*
+ * base.css — design tokens, the app grid, and shared UI controls.
+ * Every panel uses these classes so the whole app looks consistent.
+ */
+:root {
+  --bg: #111113;          /* app chrome background */
+  --panel: #1a1a1d;       /* side panels */
+  --panel-2: #222226;     /* inputs, raised surfaces */
+  --panel-3: #2b2b30;     /* hover */
+  --line: #2e2e33;        /* borders/dividers */
+  --text: #ececf1;
+  --text-2: #a1a1aa;      /* secondary text */
+  --text-3: #6b6b74;      /* hints */
+  --accent: #6d5efc;      /* selection & primary actions */
+  --accent-2: #8b7fff;
+  --accent-soft: rgba(109, 94, 252, 0.18);
+  --danger: #f2555a;
+  --success: #34c38f;
+  --canvas: #e9e9ec;      /* infinite canvas background */
+  --radius: 6px;
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+  --toolbar-h: 48px;
+  --left-w: 240px;
+  --right-w: 280px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 12px/1.4 var(--font);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+/* ---------- app grid ---------- */
+#app {
+  display: grid;
+  height: 100vh;
+  grid-template-columns: var(--left-w) 1fr var(--right-w);
+  grid-template-rows: var(--toolbar-h) 1fr auto;
+  grid-template-areas:
+    'toolbar toolbar toolbar'
+    'left    canvas  right'
+    'left    code    right';
+}
+#toolbar { grid-area: toolbar; border-bottom: 1px solid var(--line); background: var(--panel); }
+#left-panel { grid-area: left; border-right: 1px solid var(--line); background: var(--panel); overflow: auto; min-height: 0; }
+#canvas-viewport { grid-area: canvas; position: relative; overflow: hidden; background: var(--canvas); min-width: 0; min-height: 0; }
+#right-panel { grid-area: right; border-left: 1px solid var(--line); background: var(--panel); overflow: auto; min-height: 0; }
+#code-panel { grid-area: code; border-top: 1px solid var(--line); background: var(--panel); min-width: 0; }
+#code-panel[hidden] { display: none; }
+
+/* ---------- shared controls ---------- */
+.f-section { border-bottom: 1px solid var(--line); padding: 12px; }
+.f-section__head {
+  display: flex; align-items: center; justify-content: space-between;
+  font-weight: 600; font-size: 11px; color: var(--text); margin-bottom: 8px;
+}
+.f-section__head:last-child { margin-bottom: 0; }
+.f-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.f-row:last-child { margin-bottom: 0; }
+.f-label { color: var(--text-2); font-size: 11px; min-width: 0; flex-shrink: 0; }
+.f-hint { color: var(--text-3); font-size: 11px; }
+
+.f-input, .f-select {
+  height: 28px; min-width: 0; width: 100%;
+  background: var(--panel-2); color: var(--text);
+  border: 1px solid transparent; border-radius: var(--radius);
+  padding: 0 8px; font: inherit; outline: none;
+}
+.f-input:hover, .f-select:hover { border-color: var(--line); }
+.f-input:focus, .f-select:focus { border-color: var(--accent); }
+.f-select { appearance: none; padding-right: 20px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-2) 50%), linear-gradient(135deg, var(--text-2) 50%, transparent 50%);
+  background-position: calc(100% - 11px) 12px, calc(100% - 7px) 12px; background-size: 4px 4px; background-repeat: no-repeat; }
+textarea.f-input { height: auto; padding: 6px 8px; resize: vertical; line-height: 1.4; }
+
+/* number input with a small prefix label, e.g. "W 120" */
+.f-num { position: relative; flex: 1; min-width: 0; }
+.f-num > span {
+  position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+  color: var(--text-3); font-size: 10px; cursor: ew-resize; user-select: none;
+}
+.f-num > input { padding-left: 22px; }
+
+.f-btn {
+  height: 28px; padding: 0 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  background: var(--panel-2); color: var(--text); border: 1px solid transparent; border-radius: var(--radius);
+  font: inherit; cursor: pointer; white-space: nowrap;
+}
+.f-btn:hover { background: var(--panel-3); }
+.f-btn.is-active, .f-btn[aria-pressed='true'] { background: var(--accent-soft); color: var(--accent-2); }
+.f-btn--primary { background: var(--accent); color: #fff; }
+.f-btn--primary:hover { background: var(--accent-2); }
+.f-btn--ghost { background: transparent; }
+.f-btn--ghost:hover { background: var(--panel-2); }
+.f-btn--icon { width: 28px; padding: 0; }
+.f-btn--danger:hover { color: var(--danger); }
+
+/* segmented control (a row of toggle buttons) */
+.f-seg { display: flex; background: var(--panel-2); border-radius: var(--radius); padding: 2px; gap: 2px; flex: 1; }
+.f-seg > button {
+  flex: 1; height: 24px; border: 0; border-radius: 4px; background: transparent; color: var(--text-2);
+  font: inherit; cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.f-seg > button:hover { color: var(--text); }
+.f-seg > button.is-active { background: var(--panel-3); color: var(--text); }
+
+/* color swatch button */
+.f-swatch {
+  width: 28px; height: 28px; flex-shrink: 0; border-radius: var(--radius); border: 1px solid var(--line);
+  padding: 0; cursor: pointer; overflow: hidden; position: relative;
+  background-image: linear-gradient(45deg, #444 25%, transparent 25%, transparent 75%, #444 75%),
+                    linear-gradient(45deg, #444 25%, transparent 25%, transparent 75%, #444 75%);
+  background-size: 8px 8px; background-position: 0 0, 4px 4px; background-color: #666;
+}
+.f-swatch > i { position: absolute; inset: 0; }
+
+.f-icon { width: 16px; height: 16px; display: block; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- toasts ---------- */
+#toast-root { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 1000; pointer-events: none; }
+.f-toast {
+  background: #2b2b30; color: var(--text); padding: 8px 14px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  opacity: 0; transform: translateY(8px); transition: opacity .2s, transform .2s; font-size: 12px; max-width: 420px;
+}
+.f-toast.is-in { opacity: 1; transform: none; }
+.f-toast--success { border-left: 3px solid var(--success); }
+.f-toast--error { border-left: 3px solid var(--danger); }
+
+/* scrollbars */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #34343a; border-radius: 10px; border: 2px solid var(--panel); }
+::-webkit-scrollbar-track { background: transparent; }
