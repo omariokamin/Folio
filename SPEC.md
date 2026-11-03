@@ -388,3 +388,60 @@ one to the active brand kit with automatic versions. Users can also save any sel
   reversed → present three with a recommendation and wait for the choice → colour + save_logo); SVG authoring rules
   (viewBox, simple geometry, few anchor points, consistent strokes, text only in fonts from the list, no effects,
   details no smaller than 1/48 of the mark); red flags; suggest a trademark search before real use.
+
+---
+
+## Pages (v0.6)
+
+A document has one or more **pages** (like "Website", "Social", "Ideas"). Each page holds its own artboards.
+
+### Data
+```
+doc.pages = [ { id: 'p_ab12', name: 'Page 1', roots: [ …artboard ids ], viewport?: { x, y, zoom } } ]
+doc.page  = 'p_ab12'            // the page being viewed
+doc.roots === <active page>.roots   // the SAME array object (invariant)
+```
+- `doc.roots` stays "the artboards of the current page", so every existing module (layers, canvas, zoom,
+  export targets, AI outlines) keeps working on the current page unchanged.
+- All nodes of all pages stay in `doc.nodes`. Components and instances work across pages (propagation already
+  walks `doc.nodes`).
+- Migration: a document without `pages` becomes one page "Page 1" holding all roots. New documents start with
+  one page "Page 1".
+- The invariant is re-established after `load`, `newDoc`, undo/redo restore (JSON.parse breaks the shared
+  reference) and any page operation. Undo/redo keeps the user on the page they are viewing when it still exists.
+
+### Store API (src/state.js)
+- `pages()` → array, `currentPage()` → page, `pageOf(nodeId)` → page holding that node's root.
+- `addPage(name?, { index, activate })` → page (name defaults to "Page N"), `renamePage(id, name)`,
+  `removePage(id)` (refuses the last page; removes its nodes through `remove` so component rules still apply),
+  `movePage(id, index)`, `duplicatePage(id)`.
+- `switchPage(id)`: remembers the viewport on the page being left, rebinds `doc.roots`, clears the selection,
+  emits `'page'` then `'change'`; the canvas restores the target page's viewport or zooms to fit.
+- `moveToPage(rootIds, pageId)` moves artboards (roots only) to another page, placed to the right of its artboards.
+- `withPage(pageId, fn)`: temporarily binds `doc.roots` to another page while `fn` runs (no `'page'` event),
+  so code can create artboards on a page without switching the view.
+- `ensurePage(name)` → page with that name (created at the end if missing). Used for "Components" and "Logos".
+- All page operations emit `'change'` and are recorded by the next `commit()`.
+
+### Rendering
+- `render.js` renders the artboards of **all** pages; artboards of inactive pages are `display:none`, so they are
+  never hit-tested or shown, but their elements exist (component thumbnails keep working).
+- Screenshots / PNG export of something on another page: `Folio.exporter.pngDataUrl` temporarily shows that
+  page's artboard (or the caller switches page).
+
+### UI
+- Layers tab: a **Pages** list above the layers tree (collapsible): click to switch, double-click to rename,
+  "+" to add, drag to reorder, right-click: Rename, Duplicate, Delete (confirm when it has artboards).
+  Right-click an artboard in layers / canvas: **Move to page ▸**. Current page highlighted.
+- Shortcut: ⌥↑ / ⌥↓ (Alt+PageUp / Alt+PageDown) previous / next page.
+- Components starter kit goes on the **Components** page (`ensurePage('Components')` + `withPage`), and the UI
+  switches to it after the user clicks "Add starter kit". Logo drafts go on the **Logos** page.
+
+### AI tools
+- `get_document` lists all pages (id, name, artboard count, current flag) and the current page's artboards in full;
+  other pages' artboards as one-line summaries.
+- New tool (appended at the end) `manage_pages` `{ action: 'list'|'create'|'switch'|'rename'|'delete'|'move',
+  page_id?, name?, node_ids?, index? }`. Creating artboards with `create_nodes` `parent_id: null` uses the current
+  page unless `page_id` is given. Tools that touch or screenshot a node on another page switch the view to that
+  page first (the user follows along) and say so in the result.
+- `add_starter_kit` → Components page; `draft_logo` → Logos page.
