@@ -359,6 +359,14 @@ one to the active brand kit with automatic versions. Users can also save any sel
 - `toDataUrl(svg)` (`data:image/svg+xml;charset=utf-8,` + encodeURIComponent), `size(svg)` → `{width, height}` from viewBox.
 - `fromNode(nodeId)` → `Promise<svg>`: a Folio frame/image as SVG (html-to-image `toSvg` with embedded fonts; or the
   image's own SVG when it already is one). Used by "Save selection as logo".
+- As built: `toSvg` output is a `<foreignObject>` (which `sanitize` must drop), so `fromNode` draws real vectors
+  itself — frames → rect/path (solid, linear, radial fills; radius; border; clip), text → `<text>`/`<tspan>` per
+  rendered line, SVG images → nested `<svg>`; raster images, conic/mesh/noise fills and rotation are left out.
+  `embedFonts(svg, warnings?)` and `fromNode(id, warnings?)` push plain-language warnings into the optional array.
+  `decode(src)` → SVG text of a `data:image/svg+xml` URL (base64 or percent-encoded) or null.
+  `sanitize` keeps a `<style>` only when it is nothing but `@font-face` rules with `data:` font files (what
+  `embedFonts` writes), so sanitizing an embedded logo again is lossless. Font CSS comes from
+  `Folio.exporter.fontFaceCss(families, text, {exact})` (shared with PNG export; `exact` cuts fonts to the text).
 
 ### Brand kit logos
 - A logo may carry `version: 'on-light' | 'on-dark' | 'mono' | 'symbol'` and `group: '<id>'` linking the versions of

@@ -931,7 +931,7 @@ window.Folio = window.Folio || {};
   }
 
   const VERSION_LABELS = { 'on-light': 'On light', 'on-dark': 'On dark', mono: 'Mono', symbol: 'Symbol' };
-  const baseLogoName = (l) => String(l.name || 'Logo').replace(/\s+[—–-]\s+(on light|on dark|mono|symbol)$/i, '') || 'Logo';
+  const baseLogoName = (l) => String(l.name || 'Logo').replace(/\s+[—–-]\s+(on light|on dark|mono|one colour|symbol)$/i, '') || 'Logo';
 
   /** The sanitized SVG behind a logo, or null (raster / external / broken). */
   function logoSvg(l) {

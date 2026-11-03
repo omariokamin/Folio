@@ -117,7 +117,7 @@ window.Folio = window.Folio || {};
     if (/\bxlink:/.test(text) && !/xmlns:xlink\s*=/.test(text)) text = text.replace(/<svg\b/i, `<svg xmlns:xlink="${XLINK}"`);
     const src = new DOMParser().parseFromString(text, 'image/svg+xml');
     const err = src.querySelector('parsererror');
-    if (err) throw new Error('That SVG could not be read: ' + (err.textContent || '').trim().split('\n')[0].slice(0, 160));
+    if (err) throw new Error('That SVG could not be read: ' + ((err.textContent || '').match(/(line \d+ at column \d+: .*?)(?=Below is|\n|$)/) || ['', 'it is not well-formed XML'])[1].slice(0, 160));
     const inRoot = src.documentElement;
     if (!inRoot || inRoot.localName !== 'svg' || (inRoot.namespaceURI && inRoot.namespaceURI !== NS)) throw new Error('The markup must start with an <svg> element.');
 
@@ -327,17 +327,18 @@ window.Folio = window.Folio || {};
     const txt = col('text');
     const ink = txt && lightness(txt) < DARK ? txt : '#111111';
     let darkest = null;
-    recolor(svg, (c) => {
+    (String(svg).match(/(?:fill|stroke|stop-color)="[^"]+"/g) || []).forEach((a) => {
+      const c = a.slice(a.indexOf('"') + 1, -1);
       const l = lightness(c);
       if (l != null && (!darkest || l < darkest.l)) darkest = { c, l };
     });
-    const knockout = darkest && darkest.l < DARK ? darkest.c : '#111111';
+    const knockout = darkest && darkest.l < DARK ? darkest.c : null; // nothing dark turns light → light paints stay
     return {
       'on-light': svg,
       // dark paints turn light; near-white knockouts (text on a dark badge) take the dark colour so they stay readable
       'on-dark': recolor(svg, (c) => {
         const l = lightness(c);
-        return l == null ? c : l < DARK ? paper : l > LIGHT ? knockout : c;
+        return l == null ? c : l < DARK ? paper : l > LIGHT && knockout ? knockout : c;
       }),
       // one ink; near-white knockouts stay paper-white
       mono: recolor(svg, (c) => {
