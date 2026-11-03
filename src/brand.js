@@ -60,6 +60,8 @@ window.Folio = window.Folio || {};
     { id: 'surface', name: 'Surface', value: '#f4f4f5' },
     { id: 'text', name: 'Text', value: '#18181b' },
     { id: 'muted', name: 'Muted', value: '#71717a' },
+    { id: 'success', name: 'Success', value: '#16a34a' },
+    { id: 'danger', name: 'Danger', value: '#dc2626' },
   ];
   const CORE_FONTS = [
     { id: 'heading', name: 'Heading', family: 'Inter', weight: 700 },
@@ -74,6 +76,8 @@ window.Folio = window.Folio || {};
     surface: 'Cards and panels on the background',
     text: 'Main text colour',
     muted: 'Secondary text, captions, borders',
+    success: 'Confirmations, positive states, success badges',
+    danger: 'Errors, destructive actions, warnings',
     heading: 'Headlines and titles',
     body: 'Paragraphs, buttons and UI text',
   };
@@ -249,7 +253,7 @@ window.Folio = window.Folio || {};
       name: 'Folio Violet',
       blurb: 'Tech & SaaS — crisp, modern, confident',
       colors: [
-        ...colorsOf({ primary: '#6d5efc', secondary: '#14112b', accent: '#22d3ee', background: '#ffffff', surface: '#f4f3ff', text: '#14112b', muted: '#6b6880' }),
+        ...colorsOf({ primary: '#6d5efc', secondary: '#14112b', accent: '#22d3ee', background: '#ffffff', surface: '#f4f3ff', text: '#14112b', muted: '#6b6880', success: '#16a34a', danger: '#dc2626' }),
         { id: 'success', name: 'Success', value: '#16a34a' },
       ],
       fonts: [
@@ -282,7 +286,7 @@ window.Folio = window.Folio || {};
       name: 'Crumb Bakery',
       blurb: 'Food & hospitality — warm, cosy, handmade',
       colors: [
-        ...colorsOf({ primary: '#c2410c', secondary: '#5b2a12', accent: '#f2b33d', background: '#fff8ee', surface: '#f8e7cf', text: '#3b1f12', muted: '#8a6a58' }),
+        ...colorsOf({ primary: '#c2410c', secondary: '#5b2a12', accent: '#f2b33d', background: '#fff8ee', surface: '#f8e7cf', text: '#3b1f12', muted: '#8a6a58', success: '#3f7d3a', danger: '#b42318' }),
         { id: 'sage', name: 'Sage', value: '#8fa37e' },
       ],
       fonts: [
@@ -314,7 +318,7 @@ window.Folio = window.Folio || {};
       templateId: 'northwind',
       name: 'Northwind',
       blurb: 'Corporate & finance — trustworthy, calm, precise',
-      colors: colorsOf({ primary: '#1d4ed8', secondary: '#0b1f3a', accent: '#0ea5e9', background: '#ffffff', surface: '#f1f5f9', text: '#0f172a', muted: '#64748b' }),
+      colors: colorsOf({ primary: '#1d4ed8', secondary: '#0b1f3a', accent: '#0ea5e9', background: '#ffffff', surface: '#f1f5f9', text: '#0f172a', muted: '#64748b', success: '#15803d', danger: '#b91c1c' }),
       fonts: [
         { id: 'heading', family: 'Manrope', weight: 800 },
         { id: 'body', family: 'Inter', weight: 400 },
@@ -344,7 +348,7 @@ window.Folio = window.Folio || {};
       name: 'Neon Club',
       blurb: 'Events & nightlife — loud, bold, made for social',
       colors: [
-        ...colorsOf({ primary: '#ff2e88', secondary: '#7c3aed', accent: '#d4ff3a', background: '#0a0a12', surface: '#1a1a26', text: '#ffffff', muted: '#a3a3c2' }),
+        ...colorsOf({ primary: '#ff2e88', secondary: '#7c3aed', accent: '#d4ff3a', background: '#0a0a12', surface: '#1a1a26', text: '#ffffff', muted: '#a3a3c2', success: '#4ade80', danger: '#f87171' }),
         { id: 'electric', name: 'Electric blue', value: '#2ee6ff' },
       ],
       fonts: [
