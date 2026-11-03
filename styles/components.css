@@ -55,7 +55,7 @@
 
 .kp-thumb {
   position: relative; height: 64px; overflow: hidden; display: flex; align-items: center; justify-content: center;
-  border: 1px solid var(--line); border-radius: var(--radius); background: #f4f4f6; color: var(--text-3);
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--canvas); color: var(--text-3);
   pointer-events: none; transition: border-color .1s, box-shadow .1s;
 }
 .kp-tile__btn:hover .kp-thumb { border-color: var(--comp); box-shadow: 0 0 0 1px var(--comp); }

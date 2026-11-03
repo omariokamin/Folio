@@ -160,7 +160,9 @@ window.Folio = window.Folio || {};
 
   function group({ set, items }) {
     const isOpen = !set || !collapsed.has(set.id);
-    const body = h('div', { class: 'kp-grid' }, isOpen ? items.map(tile) : []);
+    // one scale per set, so S / M / L variants keep their relative sizes
+    const k = set ? Math.min(...items.map((c) => fitScale(layoutBox(c.mainId)))) : null;
+    const body = h('div', { class: 'kp-grid' }, isOpen ? items.map((c) => tile(c, k)) : []);
     if (!set) return h('section', { class: 'kp-group' }, h('div', { class: 'kp-group__head' }, h('span', { class: 'kp-group__name' }, 'Components')), body);
     const name = h('span', { class: 'kp-group__name' }, set.name);
     const head = h(
@@ -196,10 +198,17 @@ window.Folio = window.Folio || {};
     return b;
   }
 
-  function tile(c) {
+  const isWide = (b) => !!b && b.width / Math.max(1, b.height) > 3.2;
+  /** Largest scale (≤ 1) that fits a box in its tile. */
+  function fitScale(b) {
+    if (!b || !b.width || !b.height) return 1;
+    return Math.min(((isWide(b) ? TW * 2 + 8 : TW) - 12) / b.width, (TH - 12) / b.height, 1);
+  }
+
+  function tile(c, k) {
     const label = variantLabel(c);
     const box = layoutBox(c.mainId);
-    const wide = box && box.width / Math.max(1, box.height) > 3.2;
+    const wide = isWide(box);
     const name = h('span', { class: 'kp-tile__name' }, label);
     const btn = h(
       'button',
@@ -210,7 +219,7 @@ window.Folio = window.Folio || {};
         'aria-label': `Add ${c.setId ? c.name + ' ' + label : c.name}`,
         dataset: { comp: c.id },
       },
-      thumb(c, box),
+      thumb(c, box, k || fitScale(box)),
       name
     );
     btn.addEventListener('click', () => {
@@ -229,16 +238,13 @@ window.Folio = window.Folio || {};
   const layoutBox = (id) => (Folio.render && Folio.render.layoutBox ? Folio.render.layoutBox(id) : null);
 
   /** A scaled clone of the main's rendered DOM. */
-  function thumb(c, b) {
+  function thumb(c, b, k) {
     const box = h('div', { class: 'kp-thumb', 'aria-hidden': 'true' });
     const src = Folio.render && Folio.render.el ? Folio.render.el(c.mainId) : null;
     if (!src || !b || !b.width || !b.height) {
       box.appendChild(icon('grid', 18));
       return box;
     }
-    const wide = b.width / Math.max(1, b.height) > 3.2;
-    const tw = wide ? TW * 2 + 8 : TW;
-    const k = Math.min((tw - 12) / b.width, (TH - 12) / b.height, 1);
     const clone = src.cloneNode(true);
     const strip = (el) => {
       el.removeAttribute('data-id');

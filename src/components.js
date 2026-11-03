@@ -1062,7 +1062,7 @@ window.Folio = window.Folio || {};
         const desktop = v.Layout === 'Desktop';
         const links = ['Product', 'Pricing', 'Customers', 'About'].map((l, i) => T(l, l, t, { size: 14, weight: i ? 400 : 600, color: i ? t.muted : t.ink }));
         return F('Nav bar', { dir: 'row', w: desktop ? 1040 : 390, h: 64, pad: [0, desktop ? 32 : 16, 0, desktop ? 32 : 16], align: 'center', justify: 'space-between', fill: t.surface, shadows: [shadow(1, 0, 0, '#0000001a')] }, [
-          F('Logo', { dir: 'row', gap: 8, align: 'center' }, [F('Mark', { w: 24, h: 24, radius: 6, fill: t.primary }), T('Name', 'Northwind', t, { size: 16, weight: 700, font: t.heading })]),
+          F('Logo', { dir: 'row', gap: 8, align: 'center' }, [F('Mark', { w: 24, h: 24, radius: 6, fill: t.primary }), T('Name', t.brandName || 'Northwind', t, { size: 16, weight: 700, font: t.heading })]),
           desktop ? F('Links', { dir: 'row', gap: 32, align: 'center' }, links) : T('Menu', 'Menu', t, { size: 14, weight: 500 }),
           F('Action', { dir: 'row' }),
         ]);
@@ -1116,6 +1116,7 @@ window.Folio = window.Folio || {};
     const subtle = mix(surface, text, 0.06);
     return {
       ...L,
+      brandName: b.name,
       page: 'var(--color-background)',
       surface: 'var(--color-surface)',
       subtle,

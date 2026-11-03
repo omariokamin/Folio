@@ -212,8 +212,11 @@ window.Folio = window.Folio || {};
     const K = Folio.components;
     const labelled = store.doc.roots.slice();
     if (K) {
-      K.list().forEach((c) => store.get(c.mainId) && !store.isRoot(c.mainId) && labelled.push(c.mainId));
-      K.sets().forEach((st) => store.get(st.frameId) && !store.isRoot(st.frameId) && labelled.push(st.frameId));
+      // inner labels need the gap between variants (24px) to be at least a label tall, unless hovered/selected
+      const roomy = z >= 0.75;
+      const want = (id) => store.get(id) && !store.isRoot(id) && (roomy || selSet.has(id) || hov === id);
+      K.list().forEach((c) => want(c.mainId) && labelled.push(c.mainId));
+      K.sets().forEach((st) => want(st.frameId) && labelled.push(st.frameId));
     }
     labelled.forEach((id) => {
       const n = store.get(id);
