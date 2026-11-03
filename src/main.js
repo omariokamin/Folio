@@ -10,7 +10,7 @@ window.Folio = window.Folio || {};
 (function () {
   Folio.version = '0.6.0';
 
-  const MODULES = ['brand', 'components', 'render', 'canvas', 'inspector', 'layers', 'brandPanel', 'componentsPanel', 'toolbar', 'codePanel', 'shortcuts', 'ai', 'bridge'];
+  const MODULES = ['brand', 'components', 'render', 'canvas', 'inspector', 'layers', 'brandPanel', 'componentsPanel', 'toolbar', 'codePanel', 'importer', 'shortcuts', 'ai', 'bridge'];
 
   function loadDocument() {
     const store = Folio.store;
