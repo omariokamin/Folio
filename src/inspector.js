@@ -1117,7 +1117,7 @@ window.Folio = window.Folio || {};
     }
     const ovr = k.overridesOf(p.id) || {};
     const paths = Object.keys(ovr);
-    body.push(h('div', { class: 'f-label ins-kc__sub' }, paths.length ? 'Overrides' : 'No overrides — this copy matches the main.'));
+    body.push(paths.length ? h('div', { class: 'f-label ins-kc__sub' }, 'Overrides') : h('p', { class: 'f-hint ins-kc__none' }, 'No overrides — this copy matches the main.'));
     paths.forEach((path) => {
       const fields = Object.keys(ovr[path]).map((f) => FIELD_NAMES[f] || f);
       body.push(
@@ -1142,11 +1142,14 @@ window.Folio = window.Folio || {};
     return section('component', 'Instance', { actions: [goMain] }, ...body);
   }
 
-  /** Rename a prop or value across the set and every variant in it, then apply. mapVariant(variant) -> variant. */
-  function editSet(set, props, mapVariant, label) {
-    const k = K();
-    k.setSetProps(set.id, props);
-    if (mapVariant) k.list().filter((c) => c.setId === set.id).forEach((c) => k.setVariantOf(c.id, mapVariant(Object.assign({}, c.variant))));
+  /** Replace a set's variant properties (the engine remaps renamed props/values by position) and commit. */
+  function editSet(set, props, label) {
+    try {
+      K().setSetProps(set.id, props);
+    } catch (e) {
+      Folio.ui.toast(e.message, 'error');
+      return rebuild();
+    }
     commit(label);
   }
 
@@ -1179,17 +1182,12 @@ window.Folio = window.Folio || {};
           title: set ? 'Component set name' : 'Component name',
           get: () => (set ? (k.getSet(set.id) || set).name : (k.get(comp.id) || comp).name),
           set: (v, final) => {
-            v = v.trim();
-            if (!final || !v) return;
-            if (set) {
-              k.getSet(set.id).name = v;
-              store.update(set.frameId, { name: v });
-              k.list().forEach((c) => c.setId === set.id && (c.name = v));
-            } else {
-              k.get(comp.id).name = v;
-              store.update(comp.mainId, { name: v });
+            if (!final || !v.trim()) return;
+            try {
+              k.update(set ? set.id : comp.id, { name: v });
+            } catch (e) {
+              Folio.ui.toast(e.message, 'error');
             }
-            store.emit('components');
           },
           commitLabel: 'Rename component',
         })
@@ -1197,10 +1195,8 @@ window.Folio = window.Folio || {};
     ];
     const desc = h('textarea', { class: 'f-input ins-kc__desc', rows: 2, placeholder: 'Description (optional)', 'data-k': 'compdesc', spellcheck: 'false' });
     desc.addEventListener('change', () => {
-      const c = k.get(comp.id);
-      if (!c) return;
-      c.description = desc.value.trim(); // shortcut: the registry has no setter for this; it is plain doc data
-      store.emit('components');
+      if (!k.get(comp.id)) return;
+      k.update(comp.id, { description: desc.value.trim() });
       commit('Component description');
     });
     bind(desc, () => {
@@ -1226,19 +1222,15 @@ window.Folio = window.Folio || {};
             if (!final || !v || v === key || props[v]) return;
             const next = {};
             Object.keys(props).forEach((kk) => (next[kk === key ? v : kk] = props[kk]));
-            editSet(set, next, (vr) => {
-              vr[v] = vr[key];
-              delete vr[key];
-              return vr;
-            }, 'Rename property');
+            editSet(set, next, 'Rename property');
           },
           noCommit: true,
         });
         const removeProp = iconBtn('x', `Remove property “${key}”`, () => {
           const next = Object.assign({}, props);
           delete next[key];
-          editSet(set, next, (vr) => (delete vr[key], vr), 'Remove property');
-        });
+          editSet(set, next, 'Remove property');
+        }, { disabled: Object.keys(props).length < 2 });
         const chips = vals.map((val) => {
           const label = h('span', { title: 'Double-click to rename' }, val);
           label.addEventListener('dblclick', () => {
@@ -1252,7 +1244,7 @@ window.Folio = window.Folio || {};
               done = true;
               const v = inp.value.trim();
               if (ok && v && v !== val && !vals.includes(v)) {
-                editSet(set, Object.assign({}, props, { [key]: vals.map((x) => (x === val ? v : x)) }), (vr) => (vr[key] === val && (vr[key] = v), vr), 'Rename value');
+                editSet(set, Object.assign({}, props, { [key]: vals.map((x) => (x === val ? v : x)) }), 'Rename value');
               } else rebuild();
             };
             inp.addEventListener('keydown', (e) => {
@@ -1267,7 +1259,7 @@ window.Folio = window.Folio || {};
             title: used.has(val) ? 'A variant uses this value — change or delete that variant first' : `Remove “${val}”`,
             'aria-label': `Remove value ${val}`,
             disabled: used.has(val),
-            onClick: () => editSet(set, Object.assign({}, props, { [key]: vals.filter((x2) => x2 !== val) }), null, 'Remove value'),
+            onClick: () => editSet(set, Object.assign({}, props, { [key]: vals.filter((x2) => x2 !== val) }), 'Remove value'),
           }, '×');
           return h('span', { class: 'ins-kc__chip' + (comp.variant && comp.variant[key] === val ? ' is-current' : '') }, label, x);
         });
@@ -1280,7 +1272,7 @@ window.Folio = window.Folio || {};
             onClick: () => {
               let n = vals.length + 1;
               while (vals.includes('Value ' + n)) n++;
-              editSet(set, Object.assign({}, props, { [key]: vals.concat('Value ' + n) }), null, 'Add value');
+              editSet(set, Object.assign({}, props, { [key]: vals.concat('Value ' + n) }), 'Add value');
             },
           },
           '+ Value'
@@ -1296,7 +1288,13 @@ window.Folio = window.Folio || {};
               title: `This variant's ${key}`,
               options: vals.map((v) => [v, v]),
               get: () => ((k.get(comp.id) || comp).variant || {})[key] || '',
-              set: (v) => k.setVariantOf(comp.id, Object.assign({}, k.get(comp.id).variant, { [key]: v })),
+              set: (v) => {
+                try {
+                  k.setVariantOf(comp.id, { [key]: v });
+                } catch (e) {
+                  Folio.ui.toast(e.message, 'error');
+                }
+              },
               commitLabel: 'Change variant',
             })
           )
@@ -1312,7 +1310,7 @@ window.Folio = window.Folio || {};
               let n = Object.keys(props).length + 1;
               while (props['Property ' + n]) n++;
               const key = 'Property ' + n;
-              editSet(set, Object.assign({}, props, { [key]: ['Default'] }), (vr) => ((vr[key] = 'Default'), vr), 'Add property');
+              editSet(set, Object.assign({}, props, { [key]: ['Default'] }), 'Add property');
             },
           },
           '+ Property'
@@ -1328,7 +1326,7 @@ window.Folio = window.Folio || {};
         onClick: () => {
           let made = null;
           try {
-            made = k.addVariant(comp.id, set ? nextVariant(comp, set) : {});
+            made = k.addVariant(comp.id, set ? nextVariant(comp, set) : null);
           } catch (e) {
             return Folio.ui.toast(e.message || 'Could not add a variant.', 'error');
           }
@@ -1382,7 +1380,8 @@ window.Folio = window.Folio || {};
       if (!locked) return;
       sec.classList.add('is-readonly');
       const body = sec.querySelector('.ins-sec__body');
-      if (body) body.prepend(h('p', { class: 'ins-ro-hint' }, icon('diamond'), RO_HINT));
+      const partial = keys.length > 0;
+      if (body) body.prepend(h('p', { class: 'ins-ro-hint' }, icon('diamond'), partial ? 'Greyed-out settings come from the main component' : RO_HINT));
       if (sec.classList.contains('is-empty')) sec.classList.remove('is-empty');
     });
   }

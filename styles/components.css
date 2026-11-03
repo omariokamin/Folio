@@ -8,6 +8,9 @@
 }
 
 #components-panel[hidden] { display: none !important; }
+/* three left tabs only fit the 240px panel as plain words */
+#left-tabs .bp-tab .f-icon { display: none; }
+#left-tabs .bp-tab { padding: 0 9px; }
 .kp { font-size: 12px; color: var(--text); padding-bottom: 32px; }
 .kp button { font: inherit; }
 
@@ -124,6 +127,7 @@ html.kp-dragging, html.kp-dragging * { cursor: grabbing !important; }
 .ins-kc__btns { display: flex; gap: 6px; flex-wrap: wrap; }
 .ins-kc__btns .f-btn { flex: 1; }
 .ins-kc__desc { min-height: 44px; }
+.ins-kc__none { margin: 8px 0; }
 .ins-kc__sub { margin: 10px 0 6px; font-size: 10px !important; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3) !important; }
 .ins-kc__propblock { padding: 8px; margin: 0 -4px 6px; border-radius: var(--radius); background: rgba(255,255,255,.02); border: 1px solid var(--line); }
 .ins-kc__propblock .ins-kc__vals { margin-top: 2px; }

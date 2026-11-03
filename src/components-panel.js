@@ -320,22 +320,20 @@ window.Folio = window.Folio || {};
     store.commit('Delete component');
   }
 
-  // shortcut: names live on the registry entries (no engine rename API); the main/set frame layer is renamed too
   function renameComp(c, v) {
-    store.update(c.mainId, { name: v });
-    const live = K().get(c.id);
-    if (live) live.name = v;
-    store.emit('components');
+    try {
+      K().update(c.id, { name: v });
+    } catch (e) {
+      return toast(e.message, 'error');
+    }
     store.commit('Rename component');
   }
   function renameSet(set, v) {
-    const live = K().getSet(set.id);
-    if (live) live.name = v;
-    store.update(set.frameId, { name: v });
-    K().list().forEach((c) => {
-      if (c.setId === set.id) c.name = v;
-    });
-    store.emit('components');
+    try {
+      K().update(set.id, { name: v });
+    } catch (e) {
+      return toast(e.message, 'error');
+    }
     store.commit('Rename component set');
   }
 
