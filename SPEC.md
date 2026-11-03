@@ -86,3 +86,108 @@ If you believe a shared file has a bug, work around it and report it in your fin
 - Drawing (frame/rect/ellipse/text/image): drag a box (click = default size). Parent = deepest frame under the pointer-down point (none = new root artboard). After creating, select it and switch back to `select`. Text tool: click creates a hug text node and starts editing immediately. Image tool: opens a file picker; image becomes a data URL `image` node.
 - Text editing: `contentEditable="plaintext-only"` on the rendered element; Esc or click outside commits; empty text on commit deletes the node.
 - Overlay: hover outline (1px accent), selection outline + handles (white squares with accent border), artboard name labels above every root (click selects, drag moves), size badge, marquee rectangle, drop indicator. Outline sizes stay constant on screen regardless of zoom.
+
+---
+
+## AI designer (v0.2)
+
+Claude designs directly on the canvas, the way coding agents drive code-native design tools over
+MCP — but here the agent loop runs **in the browser** with the user's own Anthropic API key.
+
+```
+chat panel (ai.js) ──► Claude Messages API (streaming, tool use, official SDK via ESM CDN)
+      ▲                         │ tool_use blocks
+      │ tool_result             ▼
+      └──────────── Folio.aiTools.execute(name, input) ──► Folio.store (live canvas updates)
+```
+
+### API rules (from the current Claude API docs — do not "improve" these from memory)
+- SDK: `const { default: Anthropic } = await import('https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.137.0/+esm')`
+  (fallback `https://esm.sh/@anthropic-ai/sdk@0.137.0`). Classic scripts may use dynamic `import()`.
+  Client: `new Anthropic({ apiKey, dangerouslyAllowBrowser: true })`.
+- Models (user picks; default first). Prices $/MTok input / output / cache-read:
+  `claude-opus-5-5` 4 / 20 / 0.20 (default) · `claude-sonnet-5-5` 2 / 10 / 0.20 · `claude-haiku-5-5` 0.10 / 0.50 / 0.01.
+  Cache writes ≈ 1.25× input price. Use the exact ids — never add date suffixes.
+- Request: `client.beta.messages.stream({ model, max_tokens: 64000, system, tools, messages,
+  output_config: { effort }, thinking: { type: 'adaptive', display: 'summarized' },
+  cache_control: { type: 'ephemeral' } })` then `await stream.finalMessage()`.
+  - Effort: user setting `low | medium | high`, default `medium` — always send it explicitly.
+  - Never send `temperature`, `top_p`, `top_k`, `budget_tokens`, or `thinking: {type:'disabled'}` (all 400).
+  - Never force tools: `tool_choice` stays default (`auto`). No assistant prefill.
+  - Refusal fallbacks ON for Opus/Sonnet: add `betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default'`.
+    Haiku: omit both. Response content may contain `type:'fallback'` blocks — show a small note, keep them in history.
+- Loop: append `message.content` **unchanged** as the assistant turn (thinking blocks included — history is
+  append-only; never edit or delete earlier turns). Execute every `tool_use` block, then send **all**
+  `tool_result` blocks in **one** user message (`is_error: true` on failures). Stop on `end_turn`;
+  on `pause_turn` re-send; on `refusal` stop and show `stop_details.explanation`; on `max_tokens` show an
+  error (never run truncated tool input). Cap at 40 iterations per user message.
+- Errors: use `Anthropic.AuthenticationError`, `RateLimitError`, `BadRequestError`, `APIError`,
+  `APIConnectionError` (`instanceof`, most specific first) — never string-match messages.
+- Caching: `system` and `tools` must be byte-stable across requests (no dates/ids in them). Volatile
+  context (document outline, selection) goes in the user message text.
+
+### Module contract
+**`src/ai-prompt.js` + `src/ai-tools.js` (Tools agent)**
+- `Folio.aiPrompt.system` — string. Folio's schema reference + design guidelines + workflow.
+- `Folio.aiPrompt.tools` — array of Anthropic tool definitions `{name, description, input_schema}` in a fixed order.
+- `Folio.aiPrompt.contextFor()` — string describing the current document (artboards: id, name, size)
+  and the current selection (id, type, name, parent, a compact subtree), prepended to each user message.
+- `Folio.aiTools.execute(name, input)` → `Promise<{ content, isError, summary, changedIds }>`
+  - `content`: string, or an array of content blocks (text / `{type:'image', source:{type:'base64', media_type:'image/png', data}}`)
+    usable directly as `tool_result.content`.
+  - `summary`: short human text for the chat UI, e.g. `Created 14 layers in “Hero”`.
+  - Must validate & sanitize every input (unknown types, bad colours, unknown fonts → fallback, NaN numbers,
+    huge sizes, cycles) and **never throw** — return `isError: true` with a helpful message for the model.
+  - Must not call `store.commit()` (the chat panel commits once per AI run = one undo step).
+- Tool names (fixed): `get_document`, `get_tree`, `create_nodes`, `update_nodes`, `delete_nodes`,
+  `move_nodes`, `screenshot`.
+- `src/export.js` may gain a non-downloading `Folio.exporter.pngDataUrl(id, { scale, maxSize })` (refactor
+  `exportPng` to share it) for the `screenshot` tool.
+
+**`src/ai.js` + `styles/ai.css` (Chat agent)** — `Folio.ai.init()`, `Folio.ai.open()`, `Folio.ai.close()`.
+- Right panel gets two tabs: **Design** (the existing `#inspector`) and **AI** (`#ai-panel`). `⌘/Ctrl+K` opens AI and focuses the prompt.
+- API key setup card: password input, "Remember on this device" (localStorage `folio:ai:key`; otherwise
+  sessionStorage), link to `https://console.anthropic.com/settings/keys`, plain-English note that the key
+  stays in this browser and requests go straight to Anthropic and cost money on the user's account.
+- Settings: model + effort (persist in localStorage `folio:ai:settings`).
+- Chat: messages (user, assistant markdown-lite text, collapsible thinking summaries, tool step chips using
+  `summary`, error cards), context chip ("Editing: Hero" / "New artboard"), quick-prompt chips, image
+  attachments (paste / drop / pick → base64 image block in the user message), Stop button
+  (`stream.abort()`), New chat, per-run cost estimate from `usage` + price table.
+- While running: store flag `Folio.store.aiBusy = true` + emit `'ai:busy'`; canvas still updates live.
+  At the end (success, error, or stop): `store.commit('AI: <prompt>')` once.
+
+---
+
+## Claude Code bridge (MCP) — use Folio with a Claude subscription
+
+Claude Code (logged in with the user's Pro/Max subscription) drives the Folio canvas through a local
+MCP server. Folio never sees any Claude credentials; Claude Code does all model calls.
+
+```
+Claude Code ──stdio MCP──► mcp/folio-mcp.js (Node ≥18, zero npm deps)
+                              │  also an HTTP server on 127.0.0.1:4317 that
+                              │  • serves the Folio app files (so the tab's origin is fixed)
+                              │  • GET  /bridge/events?token=…  (SSE: tool calls → browser)
+                              │  • POST /bridge/result?token=…  (browser → tool results)
+                              ▼
+                     Folio tab (src/bridge.js) ──► Folio.aiTools.execute(name, input)
+```
+
+- `mcp/folio-mcp.js`: newline-delimited JSON-RPC 2.0 MCP server over stdio implementing `initialize`
+  (echo a supported `protocolVersion`, `capabilities: {tools:{}}`, `serverInfo`, `instructions` =
+  `Folio.aiPrompt.system`), `notifications/initialized`, `ping`, `tools/list` (from `Folio.aiPrompt.tools`,
+  `input_schema` → `inputSchema`), `tools/call` (forward to the browser, await result, convert
+  content blocks: text → `{type:'text'}`, base64 image → `{type:'image', data, mimeType}`; `isError`).
+  It loads `src/ai-prompt.js` with Node's `vm` (a bare `window` object) — so **ai-prompt.js must not touch
+  the DOM or `Folio.store` at load time**. stdout is reserved for JSON-RPC; logs go to stderr.
+- Plus one bridge-only tool `open_folio` (returns the URL; opens the browser).
+- Security: random token persisted in `~/.folio/bridge.json`; `/bridge/*` requires it; listen on 127.0.0.1 only;
+  no wildcard CORS. App URL: `http://localhost:4317/?bridge=<token>`.
+- When a tool call arrives and no tab is connected: auto-open the URL in the default browser
+  (`open` / `start` / `xdg-open`), wait up to 25 s, else return `isError` telling the user to open the URL.
+- `src/bridge.js` (`Folio.bridge.init()`): if the page has `?bridge=` (or a saved token for this origin),
+  connect via EventSource, execute calls sequentially, POST results, reconnect with backoff. Status pill
+  (Connected / Claude is designing… / Disconnected). Mutating tool calls are committed with
+  `store.commit('Claude: <tool>')` after 1.2 s of quiet (one undo step per burst).
+- `.mcp.json` at the repo root registers the server for anyone who runs `claude` inside the folder.

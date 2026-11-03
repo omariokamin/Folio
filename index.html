@@ -13,6 +13,8 @@
   <link rel="stylesheet" href="styles/canvas.css" />
   <link rel="stylesheet" href="styles/inspector.css" />
   <link rel="stylesheet" href="styles/shell.css" />
+  <link rel="stylesheet" href="styles/ai.css" />
+  <link rel="stylesheet" href="styles/bridge.css" />
 </head>
 <body>
   <div id="app">
@@ -22,7 +24,11 @@
       <div id="canvas-world"></div>
       <div id="canvas-overlay"></div>
     </main>
-    <aside id="right-panel"><div id="inspector"></div></aside>
+    <aside id="right-panel">
+      <div id="right-tabs"></div>
+      <div id="inspector"></div>
+      <div id="ai-panel" hidden></div>
+    </aside>
     <section id="code-panel" hidden></section>
   </div>
   <div id="toast-root"></div>
@@ -45,6 +51,10 @@
   <script src="src/export.js"></script>
   <script src="src/shortcuts.js"></script>
   <script src="src/demo.js"></script>
+  <script src="src/ai-prompt.js"></script>
+  <script src="src/ai-tools.js"></script>
+  <script src="src/ai.js"></script>
+  <script src="src/bridge.js"></script>
   <script src="src/main.js"></script>
 </body>
 </html>
