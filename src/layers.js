@@ -7,6 +7,9 @@
  *   drag             reorder, or drop onto the middle of a frame to move it inside
  *   eye / lock       show/hide and lock/unlock (appear on hover)
  *   right-click      context menu
+ *
+ * Above the tree: the Pages list (click switch, double-click rename, + add, drag reorder,
+ * right-click Rename / Duplicate / Delete). Right-click an artboard → Move to page ▸.
  */
 window.Folio = window.Folio || {};
 
@@ -20,6 +23,10 @@ window.Folio = window.Folio || {};
   const seen = new Set(); // roots we've already auto-expanded once
 
   let root, tree, empty, indicator;
+  let pagesList, pagesBody, pagesCaret;
+  let pagesOpen = true;
+  let pageDrag = null; // page id being dragged
+  let pagesKey = '';
   let raf = 0;
   let pending = false;
   let renaming = null; // id being renamed
@@ -73,6 +80,7 @@ window.Folio = window.Folio || {};
   function render() {
     raf = 0;
     if (!tree) return;
+    renderPages();
     if (renaming || (drag && drag.active)) {
       pending = true;
       return;
@@ -274,6 +282,7 @@ window.Folio = window.Folio || {};
       ...comp,
       comp.length ? { sep: true } : null,
       { label: 'Rename', action: () => startRename(id), disabled: role === 'inner' },
+      !n.parent && store.pages().length > 1 ? { label: 'Move to page ▸', action: () => moveToPageMenu(x, y) } : null,
       { label: 'Duplicate', shortcut: k('mod+d'), action: run(A.duplicate) },
       { label: 'Delete', shortcut: k('del'), action: run(A.remove) },
       { sep: true },
@@ -290,6 +299,182 @@ window.Folio = window.Folio || {};
       { label: 'Zoom to layer', shortcut: k('shift+2'), action: run(A.zoomToSelection) },
       { label: 'View code', shortcut: k('mod+e'), action: () => Folio.codePanel && Folio.codePanel.toggle(true) },
     ]);
+  }
+
+  /** Second menu at the same spot: the other pages. Moves the selected artboards. */
+  function moveToPageMenu(x, y) {
+    const cur = store.doc.page;
+    Folio.menu.open({ x, y }, [
+      { header: 'Move to page' },
+      ...store
+        .pages()
+        .filter((p) => p.id !== cur)
+        .map((p) => ({ label: p.name, action: () => moveToPage(p) })),
+    ]);
+  }
+  function moveToPage(p) {
+    const ids = topLevel(store.selection).filter((id) => !store.get(id).parent);
+    if (!store.moveToPage(ids, p.id).length) return;
+    store.commit('Move to page');
+    Folio.ui.toast(`Moved ${ids.length === 1 ? '“' + store.get(ids[0]).name + '”' : ids.length + ' artboards'} to “${p.name}”`);
+  }
+
+  // ---------- pages ----------
+  function renderPages() {
+    if (!pagesList) return;
+    if (pagesList.querySelector('.ly-rename')) return; // don't rebuild under an inline rename
+    const cur = store.doc.page;
+    const key = JSON.stringify(store.pages().map((p) => [p.id, p.name, p.roots.length]));
+    if (key === pagesKey) {
+      // same list: only move the highlight (keeps the rows, so a double-click survives the switch)
+      pagesList.querySelectorAll('.ly-page').forEach((r) => {
+        r.classList.toggle('is-current', r.dataset.page === cur);
+        r.setAttribute('aria-selected', String(r.dataset.page === cur));
+      });
+      return;
+    }
+    pagesKey = key;
+    pagesList.replaceChildren(
+      ...store.pages().map((p) =>
+        h(
+          'div',
+          {
+            class: 'ly-page' + (p.id === cur ? ' is-current' : ''),
+            role: 'option',
+            'aria-selected': String(p.id === cur),
+            draggable: 'true',
+            dataset: { page: p.id },
+          },
+          h('span', { class: 'ly-row__icon' }, icon('file', 14)),
+          h('span', { class: 'ly-row__name' }, p.name),
+          h('span', { class: 'ly-page__count', title: `${p.roots.length} artboard${p.roots.length === 1 ? '' : 's'}` }, p.roots.length ? String(p.roots.length) : '')
+        )
+      )
+    );
+  }
+
+  function addPage() {
+    const p = store.addPage(undefined, { activate: true });
+    store.commit('Add page');
+    renderPages();
+    startPageRename(p.id);
+  }
+
+  function startPageRename(id) {
+    const row = pagesList.querySelector(`.ly-page[data-page="${CSS.escape(id)}"]`);
+    const p = store.page(id);
+    if (!row || !p) return;
+    const input = h('input', { class: 'ly-rename', value: p.name, spellcheck: false, 'aria-label': 'Page name' });
+    row.querySelector('.ly-row__name').replaceWith(input);
+    row.draggable = false;
+    input.focus();
+    input.select();
+    let done = false;
+    const finish = (save) => {
+      if (done) return;
+      done = true;
+      input.remove();
+      pagesKey = '';
+      if (save && store.renamePage(id, input.value)) store.commit('Rename page');
+      renderPages();
+    };
+    input.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') finish(true);
+      if (e.key === 'Escape') finish(false);
+    });
+    input.addEventListener('blur', () => finish(true));
+    input.addEventListener('pointerdown', (e) => e.stopPropagation());
+  }
+
+  function deletePage(p) {
+    const k = p.roots.length;
+    if (k && !window.confirm(`Delete the page “${p.name}” and its ${k} artboard${k === 1 ? '' : 's'}?\n\nYou can undo this.`)) return;
+    if (store.removePage(p.id)) store.commit('Delete page');
+  }
+
+  function pageMenu(id, x, y) {
+    const p = store.page(id);
+    if (!p || !Folio.menu) return;
+    Folio.menu.open({ x, y }, [
+      { label: 'Rename', action: () => startPageRename(id) },
+      {
+        label: 'Duplicate',
+        action: () => {
+          const c = store.duplicatePage(id);
+          store.switchPage(c.id);
+          store.commit('Duplicate page');
+        },
+      },
+      { sep: true },
+      { label: 'Delete', icon: 'trash', disabled: store.pages().length < 2, action: () => deletePage(p) },
+    ]);
+  }
+
+  function togglePages(open = !pagesOpen) {
+    pagesOpen = open;
+    pagesBody.hidden = !open;
+    pagesCaret.replaceChildren(icon(open ? 'chevron-down' : 'chevron-right', 12));
+    pagesCaret.setAttribute('aria-expanded', String(open));
+  }
+
+  function buildPages() {
+    const add = h('button', { type: 'button', class: 'f-btn f-btn--ghost f-btn--icon ly__add', title: 'Add page', 'aria-label': 'Add page' }, icon('plus', 14));
+    add.addEventListener('mousedown', (e) => e.preventDefault());
+    add.addEventListener('click', addPage);
+    pagesCaret = h('button', { type: 'button', class: 'ly-pages__toggle', 'aria-expanded': 'true', onClick: () => togglePages() });
+    const head = h('div', { class: 'ly-pages__head' }, h('span', { class: 'ly-pages__title', onClick: () => togglePages() }, pagesCaret, 'Pages'), add);
+    pagesList = h('div', { class: 'ly-pages__list', role: 'listbox', 'aria-label': 'Pages' });
+    pagesBody = h('div', {}, pagesList);
+    const rowOfPage = (e) => e.target.closest && e.target.closest('.ly-page');
+    pagesList.addEventListener('click', (e) => {
+      const row = rowOfPage(e);
+      if (row && !e.target.closest('.ly-rename')) store.switchPage(row.dataset.page);
+    });
+    pagesList.addEventListener('dblclick', (e) => {
+      const row = rowOfPage(e);
+      if (row && !e.target.closest('.ly-rename')) startPageRename(row.dataset.page);
+    });
+    pagesList.addEventListener('contextmenu', (e) => {
+      const row = rowOfPage(e);
+      if (!row) return;
+      e.preventDefault();
+      pageMenu(row.dataset.page, e.clientX, e.clientY);
+    });
+    // drag to reorder (native drag & drop: the list is short)
+    const clearDrop = () => pagesList.querySelectorAll('.is-drop-before, .is-drop-after').forEach((r) => r.classList.remove('is-drop-before', 'is-drop-after'));
+    const after = (row, e) => e.clientY > row.getBoundingClientRect().top + row.offsetHeight / 2;
+    pagesList.addEventListener('dragstart', (e) => {
+      const row = rowOfPage(e);
+      if (!row) return;
+      pageDrag = row.dataset.page;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', row.textContent);
+    });
+    pagesList.addEventListener('dragover', (e) => {
+      const row = rowOfPage(e);
+      if (!pageDrag || !row) return;
+      e.preventDefault();
+      clearDrop();
+      row.classList.add(after(row, e) ? 'is-drop-after' : 'is-drop-before');
+    });
+    pagesList.addEventListener('drop', (e) => {
+      const row = rowOfPage(e);
+      const id = pageDrag;
+      clearDrop();
+      if (!id || !row) return;
+      e.preventDefault();
+      const ids = store.pages().map((p) => p.id);
+      let index = ids.indexOf(row.dataset.page) + (after(row, e) ? 1 : 0);
+      if (index > ids.indexOf(id)) index--;
+      if (index !== ids.indexOf(id) && store.movePage(id, index)) store.commit('Move page');
+    });
+    pagesList.addEventListener('dragend', () => {
+      pageDrag = null;
+      clearDrop();
+    });
+    togglePages(true);
+    return h('section', { class: 'ly-pages' }, head, pagesBody);
   }
 
   function addArtboardMenu(anchor) {
@@ -540,7 +725,7 @@ window.Folio = window.Folio || {};
         'Press F and drag on the canvas to draw an artboard, use + above for a preset size, or choose File → Load demo.'
       )
     );
-    root.append(head, tree, empty);
+    root.append(buildPages(), head, tree, empty);
 
     tree.addEventListener('pointerdown', onPointerDown);
     tree.addEventListener('dblclick', (e) => {
@@ -571,7 +756,8 @@ window.Folio = window.Folio || {};
     store.on('selection', onSelection);
     store.on('hover', syncHover);
     render();
+    renderPages();
   }
 
-  Folio.layers = { init, refresh: render, startRename, expand: (id) => (expanded.add(id), schedule()) };
+  Folio.layers = { init, refresh: render, startRename, contextMenu, expand: (id) => (expanded.add(id), schedule()) };
 })();

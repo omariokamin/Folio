@@ -183,7 +183,7 @@ window.Folio = window.Folio || {};
 
   function confirmReplace(what) {
     const s = store();
-    if (!s.doc.roots.length) return true;
+    if (!(s.pages ? s.pages().some((p) => p.roots.length) : s.doc.roots.length)) return true; // any page with artboards
     return window.confirm(`${what}? This replaces the current document (it is not undoable). Save it to a file first if you want to keep it.`);
   }
 

@@ -86,6 +86,9 @@ The full step-by-step guide, including troubleshooting, is in
   image adjustments.
 - **Real fonts** from Google Fonts (Inter, Bricolage Grotesque, Bebas Neue, Playfair Display…).
 - **Layers panel:** drag to reorder or move layers into frames, rename, hide and lock.
+- **Pages:** split a document into pages ("Website", "Social", "Ideas"), each with its own
+  artboards and view. Add, rename, reorder and delete them above the layers; right-click an
+  artboard → **Move to page**. The components starter kit gets its own **Components** page.
 - **Code panel:** shows the HTML + CSS (or inline-styled HTML, or JSON) of whatever you select,
   updating live as you design.
 - **Export:** PNG at 1x / 2x / 3x, a complete standalone `.html` page, or copy the HTML + CSS.
@@ -165,6 +168,7 @@ the full list.
 | Zoom to 100% | `⌘0` |
 | Zoom in / out | `⌘+` / `⌘-` (or `⌘`/`Ctrl` + scroll) |
 | Toggle code panel | `⌘E` |
+| Previous / next page | `⌥↑` / `⌥↓` (or `Alt+PageUp` / `Alt+PageDown`) |
 | Save to file / Open file | `⌘S` / `⌘O` |
 | Show all shortcuts | `?` |
 

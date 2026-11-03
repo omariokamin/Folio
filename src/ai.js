@@ -75,6 +75,7 @@ window.Folio = window.Folio || {};
     add_starter_kit: 'Adding the starter kit',
     draft_logo: 'Drafting a logo',
     save_logo: 'Saving the logo',
+    manage_pages: 'Organising pages',
   };
 
   const store = Folio.store;

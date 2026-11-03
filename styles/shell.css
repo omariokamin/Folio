@@ -111,6 +111,22 @@
   font-weight: 600; font-size: 12px;
 }
 .ly__add { width: 26px !important; height: 26px; color: var(--text-2); }
+
+/* pages list (above the layers tree) */
+.ly-pages { border-bottom: 1px solid var(--line); }
+.ly-pages__head { display: flex; align-items: center; justify-content: space-between; height: 36px; padding: 0 6px 0 8px; font-weight: 600; font-size: 12px; }
+.ly-pages__title { display: flex; align-items: center; gap: 2px; cursor: pointer; user-select: none; }
+.ly-pages__toggle { width: 18px; height: 20px; padding: 0; border: 0; background: transparent; color: var(--text-3); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.ly-pages__toggle:hover { color: var(--text); }
+.ly-pages__toggle .f-icon { width: 12px; height: 12px; }
+.ly-pages__list { max-height: 196px; overflow-y: auto; padding: 0 0 6px; }
+.ly-page { position: relative; display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 14px; color: var(--text-2); cursor: default; white-space: nowrap; border: 1px solid transparent; }
+.ly-page:hover { color: var(--text); background: var(--panel-2); }
+.ly-page.is-current { color: var(--text); background: var(--accent-soft); font-weight: 600; }
+.ly-page.is-current .ly-row__icon { color: var(--accent-2); }
+.ly-page__count { color: var(--text-3); font-size: 11px; font-variant-numeric: tabular-nums; font-weight: 400; }
+.ly-page.is-drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.ly-page.is-drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
 .ly__tree { position: relative; padding: 4px 0 24px; }
 .ly__tree.is-dragging { cursor: grabbing; }
 .ly__tree.is-dragging .ly-row { cursor: grabbing; }

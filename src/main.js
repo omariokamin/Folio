@@ -15,7 +15,8 @@ window.Folio = window.Folio || {};
   function loadDocument() {
     const store = Folio.store;
     const saved = store.loadAutosave();
-    if (saved && saved.nodes && Array.isArray(saved.roots) && saved.roots.length) {
+    const hasRoots = (o) => o && Array.isArray(o.roots) && o.roots.length;
+    if (saved && saved.nodes && (hasRoots(saved) || (Array.isArray(saved.pages) && saved.pages.some(hasRoots)))) {
       store.load(saved);
       return 'autosave';
     }

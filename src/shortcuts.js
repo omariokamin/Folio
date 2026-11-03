@@ -42,6 +42,13 @@ window.Folio = window.Folio || {};
     return !!(p && p.layout && p.layout.mode === 'flex');
   };
 
+  /** Show the previous (-1) / next (+1) page; switching pages is not an undo step. */
+  function stepPage(d) {
+    const ps = store.pages();
+    const i = ps.indexOf(store.currentPage());
+    if (ps[i + d]) store.switchPage(ps[i + d].id);
+  }
+
   // ---------- actions (each one commits its own undo step) ----------
   const actions = {
     remove() {
@@ -278,6 +285,8 @@ window.Folio = window.Folio || {};
     save: () => Folio.exporter && Folio.exporter.saveFile(),
     open: () => Folio.exporter && Folio.exporter.openFile(),
     toggleCode: () => store.emit('code:toggle'),
+    prevPage: () => stepPage(-1),
+    nextPage: () => stepPage(1),
     help: () => showHelp(),
   };
   Folio.actions = actions;
@@ -326,6 +335,13 @@ window.Folio = window.Folio || {};
       items: [
         ['mod+alt+k', 'Create component'],
         ['mod+alt+b', 'Detach instance'],
+      ],
+    },
+    {
+      group: 'Pages',
+      items: [
+        ['alt+up', 'Previous page'],
+        ['alt+down', 'Next page'],
       ],
     },
     {
@@ -458,6 +474,8 @@ window.Folio = window.Folio || {};
       if (key === '/' || code === 'Slash') return run(showHelp);
       return;
     }
+    if (e.altKey && !e.shiftKey && (key === 'ArrowUp' || key === 'PageUp')) return run(actions.prevPage);
+    if (e.altKey && !e.shiftKey && (key === 'ArrowDown' || key === 'PageDown')) return run(actions.nextPage);
     if (e.altKey) return;
 
     // ----- shift + digit (zoom) -----

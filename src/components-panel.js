@@ -88,8 +88,15 @@ window.Folio = window.Folio || {};
     const comp = r ? k.get(store.get(r).instance.componentId) : k.componentOf(k.mainRootOf(id));
     if (!comp || !store.get(comp.mainId)) return toast('The main component is gone — this copy can only be detached.', 'error');
     const target = n.sourceId && store.get(n.sourceId) && k.mainRootOf(n.sourceId) ? n.sourceId : comp.mainId;
+    showPageOf(target);
     store.select([target]);
     if (Folio.canvas && Folio.canvas.zoomToFit) Folio.canvas.zoomToFit([target]);
+  }
+
+  /** Switch to the page holding a layer (mains often live on the Components page). */
+  function showPageOf(id) {
+    const p = store.pageOf && store.pageOf(id);
+    if (p && p.id !== store.doc.page) store.switchPage(p.id);
   }
 
   // ---------- data for the list ----------
@@ -137,7 +144,11 @@ window.Folio = window.Folio || {};
     if (!total) return list.replaceChildren(emptyState());
     const gs = groups();
     if (!gs.length) return list.replaceChildren(h('p', { class: 'f-hint kp-none' }, `No components match “${search.value.trim()}”.`));
-    list.replaceChildren(...gs.map(group));
+    // mains on other pages are display:none — lay them out while the thumbnails are measured and cloned
+    const mains = gs.flatMap((g) => g.items.map((c) => c.mainId));
+    const build = () => list.replaceChildren(...gs.map(group));
+    if (Folio.render && Folio.render.peek) Folio.render.peek(mains, build);
+    else build();
   }
 
   function emptyState() {
@@ -235,7 +246,9 @@ window.Folio = window.Folio || {};
     return el;
   }
 
-  const layoutBox = (id) => (Folio.render && Folio.render.layoutBox ? Folio.render.layoutBox(id) : null);
+  const R = () => Folio.render;
+  // peek: a main on another page is display:none, so lay its artboard out while measuring
+  const layoutBox = (id) => (R() && R().layoutBox ? (R().peek ? R().peek([id], () => R().layoutBox(id)) : R().layoutBox(id)) : null);
 
   /** A scaled clone of the main's rendered DOM. */
   function thumb(c, b, k) {
@@ -262,6 +275,8 @@ window.Folio = window.Folio || {};
       height: b.height + 'px',
       flex: 'none',
       transform: 'none',
+      clipPath: 'none', // a main that is itself an artboard on another page carries the peek clip
+      pointerEvents: '',
     });
     const wrap = h('div', {
       class: 'kp-thumb__in',
@@ -452,6 +467,7 @@ window.Folio = window.Folio || {};
     }
     store.commit('Add starter kit');
     const first = ids.map((id) => k.get(id)).find((c) => c && store.get(c.mainId));
+    if (first) showPageOf(first.mainId);
     if (first && Folio.canvas) {
       if (Folio.render) Folio.render.rerender();
       Folio.canvas.zoomToFit([store.rootOf(first.mainId)]);

@@ -399,7 +399,8 @@ ${html}
       cacheBust: false,
       // put the artboard at the origin of the image (right/bottom must be reset too, or the
       // computed "inset" of an artboard far out on the canvas pushes it out of frame)
-      style: { left: '0px', top: '0px', right: 'auto', bottom: 'auto', transform: 'none', margin: '0px' },
+      // (clipPath: an artboard on another page is clipped away on the canvas while it is exported)
+      style: { left: '0px', top: '0px', right: 'auto', bottom: 'auto', transform: 'none', margin: '0px', clipPath: 'none' },
     };
   }
 
@@ -425,7 +426,13 @@ ${html}
    * opts.scale: pixel ratio (default 1). opts.maxSize: cap for the longest side in px.
    * Rejects with an Error whose `code` is 'no-lib' | 'no-node' | 'no-element' | 'render'.
    */
-  async function pngDataUrl(id, opts = {}) {
+  /** Lay out the layer's artboard while fn runs, even when it sits on another page. */
+  const onCanvas = (id, fn) => (Folio.render && Folio.render.peek ? Folio.render.peek([id], fn) : fn());
+
+  function pngDataUrl(id, opts = {}) {
+    return onCanvas(id, () => pngDataUrlNow(id, opts));
+  }
+  async function pngDataUrlNow(id, opts = {}) {
     const fail = (code, msg) => Object.assign(new Error(msg), { code });
     const n = id && store.get(id);
     if (!n) throw fail('no-node', 'No layer with id ' + id);
@@ -450,6 +457,9 @@ ${html}
   async function exportPng(id, scale = 1) {
     id = id || targetId();
     if (!id) return;
+    return onCanvas(id, () => exportPngNow(id, scale));
+  }
+  async function exportPngNow(id, scale) {
     const n = store.get(id);
     const lib = window.htmlToImage;
     if (!lib || !lib.toPng) {

@@ -1363,6 +1363,29 @@ window.Folio = window.Folio || {};
       } else autoFitArmed = true;
     });
     store.on('zoom:fit', (ids) => zoomToFit(Array.isArray(ids) ? ids : undefined));
+    // another page: back to where the person left it, or fit its artboards
+    store.on('page', (page) => {
+      if (editing) endTextEdit();
+      if (gesture) cancelGesture();
+      R() && R().rerender();
+      const v = page && page.viewport;
+      if (v && isFinite(v.x) && isFinite(v.y) && v.zoom > 0) store.setViewport({ x: v.x, y: v.y, zoom: clamp(v.zoom, MIN_ZOOM, MAX_ZOOM) });
+      else if (store.doc.roots.length) zoomToFit();
+      else {
+        const s = vpSize();
+        store.setViewport({ x: Math.round(s.w / 2), y: Math.round(s.h / 2), zoom: 1 });
+      }
+    });
+    // right-click a layer on the canvas: the same menu as in the Layers panel (incl. Move to page)
+    vp.addEventListener('contextmenu', (e) => {
+      if (!Folio.layers || !Folio.layers.contextMenu) return;
+      const label = e.target.closest && e.target.closest('.f-ov-label');
+      const path = label && label.dataset.root ? [label.dataset.root] : hitPath(e.clientX, e.clientY);
+      const id = path && (store.selection.find((s) => path.includes(s)) || clickTarget(path, e.metaKey || e.ctrlKey));
+      if (!id) return;
+      e.preventDefault();
+      Folio.layers.contextMenu(id, e.clientX, e.clientY);
+    });
 
     updateCursor();
     lastDoc = store.doc;

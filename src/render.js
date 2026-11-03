@@ -8,6 +8,7 @@
  *   Folio.render.layoutBox(id)   world-space, *unrotated* layout box {x,y,width,height,rotation}
  *   Folio.render.bounds(id)      world-space axis-aligned bounding box (includes rotation)
  *   Folio.render.resolveSrc(src) `brand-logo:<id>` -> the brand logo's src (other srcs unchanged)
+ *   Folio.render.peek(ids, fn)   run fn (sync or async) with those layers' off-page artboards laid out
  *
  * It is a small keyed reconciler: one element per node (data-id), styled with
  * exactly the CSS produced by Folio.css.nodeStyles — what you see is the code.
@@ -26,6 +27,8 @@ window.Folio = window.Folio || {};
   let docDirty = true;
   let vpDirty = true;
   let raf = 0;
+  let active = new Set(); // artboards of the current page
+  const peeking = new Map(); // off-page artboard id -> peek() depth
 
   const PLACEHOLDER =
     'data:image/svg+xml;utf8,' +
@@ -93,7 +96,12 @@ window.Folio = window.Folio || {};
     docDirty = false;
     const doc = store.doc;
     const seen = new Set();
-    placeChildren(world, doc.roots, null, seen, doc);
+    // every page's artboards are rendered; other pages' are display:none (and their subtrees are
+    // only re-synced when shown/peeked or when an element is missing, so many pages stay cheap)
+    const cur = (store.currentPage && store.currentPage()) || null;
+    active = new Set(cur ? cur.roots : doc.roots);
+    const all = doc.pages ? doc.pages.flatMap((p) => p.roots) : doc.roots;
+    placeChildren(world, all, null, seen, doc);
     for (const [id, el] of els) {
       if (!seen.has(id)) {
         el.remove();
@@ -113,7 +121,9 @@ window.Folio = window.Folio || {};
       const ref = parentEl.children[i];
       if (ref !== el) parentEl.insertBefore(el, ref || null);
       i++;
-      if (node.type === 'frame') placeChildren(el, node.children, node, seen, doc);
+      if (node.type !== 'frame') continue;
+      if (!parentNode && !active.has(id) && !peeking.has(id) && intact(node, el, seen, doc)) continue;
+      placeChildren(el, node.children, node, seen, doc);
     }
     // leftovers that were deleted (moved ones get picked up by their new parent;
     // non-node helpers such as drag ghosts have no data-id and are left alone)
@@ -125,6 +135,55 @@ window.Folio = window.Folio || {};
         els.delete(cid);
       }
     }
+  }
+
+  /** An off-page subtree whose elements all exist under the right parents: mark it seen, skip the work. */
+  function intact(node, el, seen, doc) {
+    const ids = [];
+    const ok = (function walk(n, e) {
+      for (const c of n.children) {
+        const cn = doc.nodes[c];
+        const ce = els.get(c);
+        if (!cn || !ce || ce.parentNode !== e || seen.has(c)) return false;
+        ids.push(c);
+        if (cn.type === 'frame' && !walk(cn, ce)) return false;
+      }
+      return true;
+    })(node, el);
+    if (ok) ids.forEach((c) => seen.add(c));
+    return ok;
+  }
+
+  /**
+   * Run fn while the artboards holding `ids` are laid out even if they sit on another page
+   * (clipped away and click-through, so nothing flashes): measuring, thumbnails, PNG export.
+   * fn may return a promise; the artboards hide again when it settles.
+   */
+  function peek(ids, fn) {
+    const roots = [...new Set([].concat(ids || []).filter((id) => store.get(id)).map((id) => store.rootOf(id)))];
+    const cur = store.currentPage ? store.currentPage().roots : store.doc.roots;
+    const off = roots.filter((r) => !cur.includes(r));
+    const fresh = off.some((r) => !peeking.has(r));
+    off.forEach((r) => peeking.set(r, (peeking.get(r) || 0) + 1));
+    if (fresh && world) reconcile();
+    const done = () => {
+      let hide = false;
+      off.forEach((r) => (peeking.get(r) > 1 ? peeking.set(r, peeking.get(r) - 1) : (peeking.delete(r), (hide = true))));
+      if (hide) {
+        docDirty = true;
+        schedule();
+      }
+    };
+    let out;
+    try {
+      out = fn();
+    } catch (e) {
+      done();
+      throw e;
+    }
+    if (out && typeof out.then === 'function') return out.finally(done);
+    done();
+    return out;
   }
 
   function ensureEl(node) {
@@ -155,6 +214,7 @@ window.Folio = window.Folio || {};
   function updateEl(el, node, parentNode) {
     let css = Folio.css.toCssText(Folio.css.nodeStyles(node, { mode: 'canvas', parent: parentNode || null }));
     if (node.visible === false) css += ' display: none;';
+    else if (!parentNode && !active.has(node.id)) css += peeking.has(node.id) ? ' clip-path: inset(50%); pointer-events: none;' : ' display: none;';
     if (lastCss.get(el) !== css) {
       el.style.cssText = css;
       lastCss.set(el, css);
@@ -234,5 +294,5 @@ window.Folio = window.Folio || {};
     return { x: cx - w / 2, y: cy - h / 2, width: w, height: h, rotation: rot };
   }
 
-  Folio.render = { init, el, rerender, sync, schedule, bounds, layoutBox, resolveSrc, PLACEHOLDER };
+  Folio.render = { init, el, rerender, sync, schedule, bounds, layoutBox, resolveSrc, peek, PLACEHOLDER };
 })();

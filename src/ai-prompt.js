@@ -115,7 +115,7 @@ The person you are working with may be new to design tools. Talk to them in plai
 
 # How a Folio document works
 
-- The document holds artboards: top-level frames placed on an infinite canvas. A web page, a social post or an app screen is one artboard.
+- The document holds pages, and each page holds artboards: top-level frames placed on an infinite canvas. A web page, a social post or an app screen is one artboard.
 - Every layer is a node of one of three types:
   - frame: a box (a <div>). Frames hold children and have fills, borders, radius, shadows and optionally auto layout (flexbox). Rectangles, circles, dividers, buttons, cards and sections are all frames. A circle is a frame with equal width and height and style.radius 9999.
   - text: a block of text. It cannot have children.
@@ -220,7 +220,7 @@ Text defaults: Inter 16px, weight 400, lineHeight 1.4, color #111111, left align
 
 ## Colours
 
-Write colours as hex: #rrggbb, or #rrggbbaa for transparency (#ffffff26 is white at 15% opacity, #00000000 is fully transparent). When a brand kit is active, link brand colours with tokens instead (see Brand kits).
+Write colours as hex: #rrggbb, or #rrggbbaa for transparency (#ffffff26 is white at 15% opacity, #00000000 is fully transparent).
 
 ## Fonts
 
@@ -230,7 +230,7 @@ Prefer these. Other Google Fonts family names usually work too, but they are not
 
 ## Images
 
-There is no stock photo library or image search. Real images only exist if the user gives you a URL or has already placed one, so never invent image URLs or use placeholder services. The active brand kit's logos are the exception: show them with "brand-logo:<id>" (see Brand kits). Without photos, see Imagery under Designing well.
+There is no stock photo library or image search. Real images only exist if the user gives you a URL or has already placed one, so never invent image URLs or use placeholder services. The active brand kit's logos are the exception: show them with "brand-logo:<id>" (see Brand kits).
 
 # Designing well
 
@@ -296,7 +296,6 @@ Removing a tell leaves a gap: fill it with scale, real content, a colour field o
 - Social posts: hook at the top, message and visual in the middle, CTA at the bottom. Margins 64–96px, critical content in the central 80% (about 190px clear at top and bottom on stories). Headlines 90–220px, at most three lines, nothing under 28px; it must read as a thumbnail. One message. Logo small, in the variant that suits the background.
 - Ad banners: a high-contrast CTA with one action verb, at least 44px tall, usually bottom-right; text under about 20% of the area. Rearrange (don't scale) for each size; a 728×90 is one row: logo, message, CTA.
 - App screens: name the screen's one question; the biggest block answers it and the main job is one click away. Titles 18–32, KPIs 16–40, body 13–16, labels 12–14 in sentence case, numbers right-aligned in tables. Surfaces use a border or a tone step; corner radius is either tight (4–8) or soft (16–24). Near-black primary button; the accent goes on data. Avoid navy sidebars, "Welcome back" greetings, KPI icons in circles and rainbow charts.
-- Logos: only when asked; see Logo design.
 
 # Components
 
@@ -305,8 +304,17 @@ A component's main is an ordinary layer tree, usually on an artboard called "Com
 - Reuse instead of repeating. For anything that appears more than once (buttons, cards, nav bars, list rows, badges, inputs), use an existing component (list_components) or the starter kit (add_starter_kit), or build it once, turn it into a component with create_component and place it with create_instances.
 - To change every copy, edit the main. Use variants instead of near-duplicate components.
 - Keep overrides to text content and colour, fills, border colour, image src and fit, and visibility, addressed by layer name path ("Label", "Content/Title"); the instance root also owns its name, position, width, height and sizing. Everything else (layout, padding, fonts, sizes, radius, shadows, structure) follows the main; for a different look, add a variant.
-- In trees, mains carry "component" and instances "instance" (component, variant, overrides); an instance's inner layers are listed only by get_tree on the instance itself. Inside an instance, update_nodes applies only overridable fields, delete_nodes hides layers, and nothing can be created or moved in.
+- Inside an instance, update_nodes applies only overridable fields, delete_nodes hides layers, and nothing can be created or moved in.
 - When you build components: medium buttons and inputs are 40px tall (S 32, L 48), labels 14–16 at weight 500–600; each component uses a border or a shadow, not both; badges are 20–24px tall with 12px sentence-case text.
+
+# Pages
+
+Pages group artboards by kind of work ("Website", "Social", "Ideas"); the user views one page at a time.
+- Keep work on the page the user is viewing unless they ask otherwise. New artboards (create_nodes with parent_id null) land there; page_id puts them on another page.
+- Create a page with manage_pages only for a new kind of work, named after it. Follow the structure the user already has, and ask when unsure.
+- The starter kit goes on a "Components" page and logo drafts on a "Logos" page by themselves.
+- Editing or screenshotting a layer on another page switches the view there; switch back before making artboards meant for the user's page.
+- Delete a page that has artboards only when the user says so.
 
 # Brand kits
 
@@ -317,8 +325,6 @@ Layers link to the active kit with tokens, written where the literal value would
 - Font: "font": "var(--font-heading)" or "var(--font-body)". Text with a font token gets that font's weight from the kit unless you set one.
 - Corner radius: "radius": "var(--radius-sm)", "var(--radius-md)" or "var(--radius-lg)", as a single value (not inside a per-corner array).
 - Logo: an image node with "image": {"src": "brand-logo:<logoId>", "fit": "contain"} (an image fill may use the same src). Give it a width or a height; the other side follows the logo's proportions.
-
-Linked layers update by themselves when the kit is edited or the document switches kits.
 
 Core colours always exist: primary (buttons, links, highlights), on-primary (text and icons on primary fills, such as button labels), secondary (dark sections, supporting colour), accent (small details), background (page and artboard), surface (cards and panels), text, muted (secondary text, captions, borders), success (confirmations, positive states) and danger (errors, destructive actions, warnings). Kits can add custom colours (ids like c_ab12) and fonts (ids like f_ab12). Core fonts: heading (headlines and titles) and body (paragraphs, buttons and UI text).
 
@@ -333,10 +339,10 @@ When a kit is active:
   - shadow: none = no shadows (borders or the surface colour); soft = y 8–16, blur 24–48, alpha 10–15%; bold = y 16–24, blur 32–48, alpha 25–40%, or a hard offset shadow with blur 0. Shadows still go only on floating things.
   - gradients: use the kit's presets (get_brand lists their fills) rather than inventing new ones.
 
-When no kit is active, design freely. If the user describes their brand or likes a look you made, offer to save it as a kit so future designs match.
+With no kit active, design freely; if the user describes their brand or likes a look you made, offer to save it as a kit.
 
 Creating and editing kits with set_brand:
-- New kit: {"create": true, "patch": {"name": "Halden Cycles", "colors": {"primary": "#1f4d3a", "on-primary": "#ffffff", "secondary": "#2b2622", "accent": "#d9a441", "background": "#f2f0eb", "surface": "#e6e3dc", "text": "#1b1a18", "muted": "#5f5b55", "success": "#2f7a4a", "danger": "#b3261e"}, "fonts": {"heading": {"family": "Archivo", "weight": 700}, "body": "DM Sans"}, "voice": {"tagline": "…", "tone": ["plain-spoken", "practical"], "useWords": "repair, ride, fit", "avoidWords": "cheap"}, "style": {"button": "square", "density": "comfortable", "shadow": "none"}}}. It becomes the document's brand unless "activate" is false. Set all ten core colours, with strong contrast between text and background/surface and between on-primary and primary (4.5:1).
+- New kit: {"create": true, "patch": {"name": "Halden Cycles", "colors": {"primary": "#1f4d3a", "on-primary": "#ffffff", "secondary": "#2b2622", "accent": "#d9a441", "background": "#f2f0eb", "surface": "#e6e3dc", "text": "#1b1a18", "muted": "#5f5b55", "success": "#2f7a4a", "danger": "#b3261e"}, "fonts": {"heading": {"family": "Archivo", "weight": 700}, "body": "DM Sans"}, "voice": {"tone": ["plain-spoken", "practical"], "avoidWords": "cheap"}, "style": {"button": "square", "density": "comfortable", "shadow": "none"}}}. It becomes the document's brand unless "activate" is false. Set all ten core colours, with strong contrast between text and background/surface and between on-primary and primary (4.5:1).
 - Edit the active kit (or brand_id) by sending only what changes: {"patch": {"colors": [{"id": "primary", "value": "#163a2b"}]}}. Colours and fonts merge by id; an entry without a known id becomes a custom one (its id is returned); {"id": "c_ab12", "delete": true} removes a custom one. voice and style merge field by field; style.gradients replaces the list.
 - Logos: save SVG logos you drew with save_logo. set_brand only adds an https:// image URL the user gave you ({"name": "Logo on light", "src": "https://…"}); for their files, ask them to upload in the Brand panel.
 - Switch the document to a library kit: {"brand_id": "b_…", "activate": true, "patch": {}}.
@@ -358,7 +364,7 @@ Example, a wordmark for a pottery studio (the i's dot is a kiln arch):
 
 # Workflow
 
-1. Look first. The user's message starts with a short description of the document and selection; call get_document for the full outline (it includes the active brand kit) and get_tree before editing something you haven't seen. Call list_components when the document has components.
+1. Look first. The user's message starts with a short description of the document and selection; call get_document for the full outline (pages and the active brand kit) and get_tree before editing something you haven't seen. Call list_components when the document has components.
 2. Plan briefly in your head: the one-line design read and the idea (see Start from an idea), format and size, 2–3 colours plus an accent and one or two fonts (the brand kit's tokens when one is active), the sections, and which repeated parts become components. Don't write a long plan for the user.
 3. Build in sections. Create the artboard first (create_nodes with parent_id null), then one create_nodes or create_instances call per major section (nav, hero, features, pricing, footer…) with the artboard's id as parent_id. Small designs such as a social post can be created in one call.
 4. Check your work. Screenshot the artboard (and single sections for detail; get_tree shows real rendered sizes) and review it against this list:
@@ -381,12 +387,11 @@ For small edits ("make the button blue"), skip the planning: find the node, upda
 - When the user has something selected, they almost always mean it: work on or inside the selection rather than elsewhere. With nothing selected, a request for something new gets a new artboard.
 - Edit in place with update_nodes and keep existing ids; don't delete and recreate layers you could update. Keep the user's content and styles unless they ask for a change.
 - Patches deep-merge objects ({"text": {"color": "#ff0000"}} changes only the colour) but replace arrays entirely, so always send complete fills, shadows, stops, points, padding and radius arrays.
-- Use move_nodes to restructure or reorder (same parent, new index). delete_nodes removes a layer together with its children.
-- Ids look like n_ab12cd3 (components k_…, sets s_…). Use ids returned by the tools and never invent them.
+- Ids look like n_ab12cd3 (components k_…, sets s_…, pages p_…). Use ids returned by the tools and never invent them.
 
 # Tool results
 
-- create_nodes returns every new id with its layer path. Read "warnings" (what was corrected or ignored) and "layout" (layers that overflow their parent) in results and fix what they point out.
+- Read "warnings" (what was corrected or ignored), "layout" (layers that overflow their parent) and "page" (where the work went) in results, and act on them.
 
 # Example: a hero section, added to a 1440-wide artboard whose layout is a flex column
 
@@ -410,7 +415,7 @@ ${JSON.stringify(EXAMPLE)}`;
     {
       name: 'get_document',
       description:
-        'Outline of the whole document: its name, every artboard (id, name, position, size, layout and its direct children), the current selection and a summary of the active brand kit. Call this first to orient yourself.',
+        'Outline of the document: its name, its pages (other pages list one line per artboard), every artboard on the page the user is viewing (id, name, position, size, layout and its direct children), the current selection and a summary of the active brand kit. Call this first to orient yourself.',
       input_schema: { type: 'object', properties: {}, additionalProperties: false },
     },
     {
@@ -430,7 +435,7 @@ ${JSON.stringify(EXAMPLE)}`;
     {
       name: 'create_nodes',
       description:
-        'Create one or more layer trees. With parent_id null each tree becomes a new top-level artboard (placed automatically to the right of the existing artboards unless you give x/y). With a frame id, the trees are inserted into that frame (at index, or appended). Use one call per major section of a design. When a brand kit is active, link brand colours, fonts and radii with tokens (var(--color-primary), var(--font-heading), var(--radius-md)) and show logos with image src "brand-logo:<id>". Returns the new ids mapped to their layer paths, plus warnings about anything that was corrected.',
+        'Create one or more layer trees. With parent_id null each tree becomes a new top-level artboard on the page the user is viewing, or on page_id (placed automatically to the right of the existing artboards unless you give x/y). With a frame id, the trees are inserted into that frame (at index, or appended). Use one call per major section of a design. When a brand kit is active, link brand colours, fonts and radii with tokens (var(--color-primary), var(--font-heading), var(--radius-md)) and show logos with image src "brand-logo:<id>". Returns the new ids mapped to their layer paths, plus warnings about anything that was corrected.',
       input_schema: {
         type: 'object',
         properties: {
@@ -439,6 +444,7 @@ ${JSON.stringify(EXAMPLE)}`;
             description: 'Id of the frame to add into, or null to create new artboards on the canvas.',
           },
           index: { type: 'integer', minimum: 0, description: "Position among the parent's children (0 = first). Omit to append at the end." },
+          page_id: { type: 'string', description: 'Only with parent_id null: the page (id or name) to put the new artboards on, without switching the view. Default: the page the user is viewing.' },
           nodes: { type: 'array', minItems: 1, description: 'The node trees to create (recursive via "children").', items: nodeItem },
         },
         required: ['parent_id', 'nodes'],
@@ -668,13 +674,13 @@ ${JSON.stringify(EXAMPLE)}`;
     {
       name: 'add_starter_kit',
       description:
-        'Add a "Components" artboard with ready-made sets that follow the active brand kit: Button (Style Primary/Secondary/Ghost × Size S/M/L), Badge (Tone), Card (with a nested Button), Input (State Default/Focus/Error), Nav bar and Avatar (Size S/M/L). Parts that already exist are kept. Returns the components like list_components.',
+        'Add a "Components" artboard (on the "Components" page, made on demand) with ready-made sets that follow the active brand kit: Button (Style Primary/Secondary/Ghost × Size S/M/L), Badge (Tone), Card (with a nested Button), Input (State Default/Focus/Error), Nav bar and Avatar (Size S/M/L). Parts that already exist are kept. Returns the components like list_components.',
       input_schema: { type: 'object', properties: {}, additionalProperties: false },
     },
     {
       name: 'draft_logo',
       description:
-        'Draft one logo concept from SVG markup: it is sanitized (scripts, styles, images and external links removed), its fonts are embedded, and it becomes a card on the "Logo concepts" artboard (made on demand) showing it large, at 64/32/16 px tall on white and reversed on near-black, with the name and concept. The same name again replaces that card. Returns the card id, the logo image id and warnings.',
+        'Draft one logo concept from SVG markup: it is sanitized (scripts, styles, images and external links removed), its fonts are embedded, and it becomes a card on the "Logo concepts" artboard (on the "Logos" page; both made on demand) showing it large, at 64/32/16 px tall on white and reversed on near-black, with the name and concept. The same name again replaces that card. Returns the card id, the logo image id and warnings.',
       input_schema: {
         type: 'object',
         properties: {
@@ -702,6 +708,24 @@ ${JSON.stringify(EXAMPLE)}`;
         additionalProperties: false,
       },
     },
+    {
+      name: 'manage_pages',
+      description:
+        'Pages group artboards by kind of work ("Website", "Social"); the user views one page at a time. Actions: list (every page and its artboards); create (name, optional index; the view switches to the new page, so new artboards go there); switch (page_id; the view follows); rename (page_id, name); delete (page_id; a page that still has artboards needs "confirm": true, only after the user agreed; the last page cannot be deleted); move (node_ids: artboards to move to page_id, or index: the new position of page page_id). page_id is a page id (p_…) or its exact name.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', enum: ['list', 'create', 'switch', 'rename', 'delete', 'move'] },
+          page_id: { type: 'string', description: 'The page to act on (id or exact name).' },
+          name: { type: 'string', description: 'create / rename: the page name.' },
+          node_ids: { type: 'array', items: { type: 'string' }, description: 'move: artboard ids to move to page_id.' },
+          index: { type: 'integer', minimum: 0, description: 'create: where to insert the page; move: the new position of page_id (0 = first).' },
+          confirm: { type: 'boolean', description: 'delete: true once the user agreed to delete a page that has artboards.' },
+        },
+        required: ['action'],
+        additionalProperties: false,
+      },
+    },
   ];
 
   // ---------- per-message context (uses the store only when called) ----------
@@ -721,6 +745,11 @@ ${JSON.stringify(EXAMPLE)}`;
     const doc = store.doc;
     const lines = [];
     lines.push(`Document: ${q(doc.name || 'Untitled')}`);
+    const cur = typeof store.currentPage === 'function' ? store.currentPage() : null;
+    if (cur) {
+      const ps = store.pages();
+      lines.push(ps.length > 1 ? `Pages (${ps.length}): ${ps.map((p) => `${p.id} ${q(p.name)} (${p.roots.length} artboard${p.roots.length === 1 ? '' : 's'})${p.id === cur.id ? ' ← the user is viewing this one' : ''}`).join(', ')}` : `Page: ${cur.id} ${q(cur.name)} (the only page)`);
+    }
     const T0 = Folio.aiTools;
     if (T0 && T0.brandContext) {
       try {
@@ -734,9 +763,9 @@ ${JSON.stringify(EXAMPLE)}`;
     const nComps = C && C.list ? C.list().length : 0;
     if (nComps) lines.push(`Components: ${nComps} (list_components shows them)`);
     const roots = (doc.roots || []).map((id) => store.get(id)).filter(Boolean);
-    if (!roots.length) lines.push('Artboards: none yet (the canvas is empty).');
+    if (!roots.length) lines.push(`Artboards: none yet (${cur ? 'this page' : 'the canvas'} is empty).`);
     else {
-      lines.push(`Artboards (${roots.length}):`);
+      lines.push(`Artboards${cur ? ' on this page' : ''} (${roots.length}):`);
       roots.slice(0, 40).forEach((n) => lines.push(`- ${n.id} ${q(n.name)} ${n.type === 'frame' ? '' : n.type + ' '}${sizeOf(n)}${n.visible === false ? ' (hidden)' : ''}`));
       if (roots.length > 40) lines.push(`- …and ${roots.length - 40} more (see get_document)`);
     }

@@ -1621,6 +1621,7 @@ window.Folio = window.Folio || {};
     const C = Folio.canvas;
     if (!C || !C.zoomToFit) return;
     try {
+      createdRoots = createdRoots && createdRoots.filter(onCurrentPage); // never zoom to a hidden page
       if (createdRoots && createdRoots.length) {
         if (createdRoots.length === 1) fitTo(createdRoots[0]);
         else {
@@ -1629,9 +1630,9 @@ window.Folio = window.Folio || {};
         }
         return;
       }
-      const ids = changedIds.filter((id) => store.get(id));
-      if (!ids.length) return;
-      const root = store.rootOf(ids[0]);
+      const first = changedIds.find(onCurrentPage);
+      if (!first) return;
+      const root = store.rootOf(first);
       // the artboard we just made grew (e.g. a new section) and the user hasn't moved the view: follow it
       if (lastFit && lastFit.root === root && vpSame(lastFit.vp, store.viewport)) {
         const r = rectOf(root);
@@ -1701,10 +1702,115 @@ window.Folio = window.Folio || {};
     const store = S();
     const C = comps();
     if (C) C.flush(); // propagate edited mains now, so results and screenshots show the instances updated
-    const sel = (selectIds || changedIds).filter((id) => store.get(id));
+    const sel = (selectIds || changedIds).filter(onCurrentPage);
     if (sel.length) store.select(sel);
     reveal(changedIds, createdRoots);
     store.emit('ai:changed', changedIds.slice());
+  }
+
+  // ---------- pages (store page API, SPEC "Pages (v0.6)") ----------
+  const pagesOn = () => {
+    const s = S();
+    return !!(s && typeof s.pages === 'function' && typeof s.withPage === 'function' && typeof s.switchPage === 'function');
+  };
+  const pageTag = (p) => `${p.id} ${q(p.name)}`;
+  const isCurrent = (p) => {
+    const c = S().currentPage();
+    return !!(p && c && p.id === c.id);
+  };
+  function onCurrentPage(id) {
+    const store = S();
+    if (!store.get(id)) return false;
+    if (!pagesOn()) return true;
+    const p = store.pageOf(id);
+    return !p || isCurrent(p);
+  }
+  /** Artboards of every page (just doc.roots without pages). */
+  function allRoots() {
+    const store = S();
+    return pagesOn() ? [].concat(...store.pages().map((p) => p.roots)) : store.doc.roots;
+  }
+  function boardLine(id) {
+    const n = S().get(id);
+    const rs = renderedSize(id) || [Math.round(n.width), Math.round(n.height)];
+    return `${n.id} ${q(n.name)} ${rs[0]}×${rs[1]}`;
+  }
+  /** Pages with one line per artboard; the current page only counts its artboards unless `full`. */
+  function pagesOutline(full) {
+    const store = S();
+    return store.pages().map((p) => {
+      const ids = p.roots.filter((id) => store.get(id));
+      const o = { id: p.id, name: p.name };
+      if (isCurrent(p)) o.current = true;
+      if (o.current && !full) o.artboards = ids.length;
+      else {
+        o.artboards = ids.slice(0, 20).map(boardLine);
+        if (ids.length > 20) o.artboards.push(`…${ids.length - 20} more`);
+      }
+      return o;
+    });
+  }
+  function findPage(ref) {
+    const store = S();
+    const list = store.pages();
+    const s = typeof ref === 'string' ? ref.trim().replace(/^["'“]|["'”]$/g, '') : '';
+    const p = s && (list.find((x) => x.id === s) || list.find((x) => String(x.name).toLowerCase() === s.toLowerCase()));
+    if (p) return { page: p };
+    const names = list.map((x) => `${pageTag(x)}${isCurrent(x) ? ' (current)' : ''}`).join(', ');
+    return { error: `${s ? `No page ${q(s)}` : 'Which page? page_id is missing'}. Pages: ${names}.` };
+  }
+  /** The page (found or made) for a special artboard such as "Components" or "Logo concepts". */
+  function homePage(boardName, pageName) {
+    const store = S();
+    if (!pagesOn()) return null;
+    const board = allRoots().map((id) => store.get(id)).find((n) => n && n.type === 'frame' && n.name === boardName && !n.instance && !n.component);
+    return (board && store.pageOf(board.id)) || store.ensurePage(pageName);
+  }
+  /** Run fn with doc.roots bound to page (no view switch); returns fn's result. */
+  const onPage = (page, fn) => (!page || isCurrent(page) ? fn() : S().withPage(page.id, fn));
+  const pageNote = (page) =>
+    isCurrent(page) ? `on page ${pageTag(page)}, the one the user is viewing` : `on page ${pageTag(page)}; the view stays on ${q(S().currentPage().name)}, so new artboards still go there`;
+
+  // Tools that act on (or screenshot) existing layers: the view follows them to their page.
+  const FOLLOW_TOOLS = new Set(['create_nodes', 'update_nodes', 'delete_nodes', 'move_nodes', 'screenshot', 'create_component', 'create_instances', 'update_instances']);
+  function touchedIds(inp) {
+    const out = [];
+    const add = (v) => typeof v === 'string' && v.trim() && out.push(v);
+    [inp.parent_id, inp.node_id, inp.id].forEach(add);
+    [inp.ids, inp.node_ids].forEach((a) => Array.isArray(a) && a.forEach(add));
+    [inp.moves, inp.items, inp.updates].forEach((a) => Array.isArray(a) && a.forEach((it) => isObj(it) && (add(it.parent_id), add(it.id))));
+    return out;
+  }
+  /** Switch the view to the page of the first layer the call touches. Returns a note for the result, or ''. */
+  function followPage(inp) {
+    if (!pagesOn()) return '';
+    const store = S();
+    const from = store.currentPage();
+    for (const ref of touchedIds(inp).slice(0, 50)) {
+      const n = store.get(ref) || resolve(ref).node;
+      if (!n) continue;
+      const p = store.pageOf(n.id);
+      if (!p || isCurrent(p)) return '';
+      store.switchPage(p.id);
+      return `The view switched from page ${q(from ? from.name : '')} to ${pageTag(p)}, where ${n.id} is, so the user can follow along. New artboards now go on this page; manage_pages "switch" goes back.`;
+    }
+    return '';
+  }
+  function withNote(res, note) {
+    if (Array.isArray(res.content)) {
+      const t = res.content.find((b) => b.type === 'text');
+      if (t) t.text += ' ' + note;
+      else res.content.unshift({ type: 'text', text: note });
+      return res;
+    }
+    let o = null;
+    try {
+      o = JSON.parse(res.content);
+    } catch (e) {
+      /* plain text result */
+    }
+    res.content = isObj(o) ? JSON.stringify(Object.assign({ page: note }, o)) : `${note}\n${res.content}`;
+    return res;
   }
 
   // ---------- results ----------
@@ -1754,7 +1860,9 @@ window.Folio = window.Folio || {};
       const p = store.getParent(n.id);
       return { id: n.id, type: n.type, name: n.name, parent: p ? `${p.id} ${q(p.name)}` : null, artboard: store.rootOf(n.id) };
     });
-    const out = { document: doc.name || 'Untitled', artboards, selection };
+    const out = { document: doc.name || 'Untitled' };
+    if (pagesOn()) out.pages = pagesOutline(false);
+    Object.assign(out, { artboards, selection });
     const brief = brandBrief();
     out.brand = brief || null;
     if (!brief && brandsAvailable()) out.brandNote = 'No brand kit is active: design freely, and offer to save the look as a kit with set_brand.';
@@ -1763,7 +1871,7 @@ window.Folio = window.Folio || {};
       const names = [...C.sets().map((x) => `${q(x.name)} (${C.list().filter((c) => c.setId === x.id).length} variants)`), ...C.list().filter((c) => !c.setId).map((c) => q(c.name))];
       out.components = `${names.slice(0, 20).join(', ')}. list_components shows their ids, variants and layer paths.`;
     }
-    if (!artboards.length) out.note = 'The canvas is empty. Create an artboard with create_nodes (parent_id null).';
+    if (!artboards.length) out.note = `${out.pages ? 'This page' : 'The canvas'} is empty. Create an artboard with create_nodes (parent_id null).`;
     return result(out, `Read the document (${artboards.length} artboard${artboards.length === 1 ? '' : 's'})`, []);
   }
 
@@ -1813,6 +1921,16 @@ window.Folio = window.Folio || {};
         return fail(`${q(parent.name)} (${parent.id}) is part of an instance, and instances follow their main component, so layers can't be added inside them. Add the layers to the main${parent.sourceId ? ' (' + parent.sourceId + ')' : ''} to change every instance, or detach this instance first (update_instances with "detach": true). Nothing was created.`, 'Cannot add inside an instance');
     }
     const pid = parent ? parent.id : null;
+    let page = null; // page_id: another page for the new artboards (built there without switching the view)
+    if (input.page_id != null && input.page_id !== '') {
+      if (!pagesOn()) notes.push('this Folio has no pages, so page_id was ignored');
+      else if (pid) notes.push('page_id only applies to new artboards (parent_id null), so it was ignored');
+      else {
+        const pr = findPage(input.page_id);
+        if (pr.error) return fail(pr.error + ' Nothing was created.', 'Page not found');
+        page = pr.page;
+      }
+    }
     const info = {
       seen: new WeakSet(),
       count: 0,
@@ -1828,7 +1946,7 @@ window.Folio = window.Folio || {};
     if (info.truncated) ctx.warn(`only the first ${MAX_NODES_PER_CALL} nodes were created (${info.truncated} skipped) — split big designs into one call per section`);
     if (!clean.length) return fail('No valid nodes to create. ' + ctx.warnings().join(' '), 'Nothing to create');
 
-    const list = pid ? parent.children : store.doc.roots;
+    const list = pid ? parent.children : page ? page.roots : store.doc.roots;
     if (index != null) {
       index = Number(index);
       if (!isFinite(index)) index = undefined;
@@ -1839,7 +1957,7 @@ window.Folio = window.Folio || {};
     const topIds = [];
     const allIds = [];
     const placed = [];
-    clean.forEach((tree, i) => {
+    onPage(page, () => clean.forEach((tree, i) => {
       if (!pid && (tree.x == null || tree.y == null)) {
         const spot = nextArtboardSpot();
         if (tree.x == null) tree.x = spot.x;
@@ -1855,13 +1973,14 @@ window.Folio = window.Folio || {};
         n.children.forEach((c) => walk(store.get(c), p));
       };
       walk(node, prefix);
-    });
+    }));
     info.fonts.forEach((f) => Folio.fonts && Folio.fonts.ensure && Folio.fonts.ensure(f));
 
     const roots = pid ? [] : topIds;
     afterMutation(allIds, topIds, roots);
 
     const out = { created };
+    if (page && !isCurrent(page)) out.page = 'Created ' + pageNote(page);
     if (pid) out.parent = `${pid} ${q(parent.name)}`;
     else out.artboards = topIds.map((id) => {
       const n = store.get(id);
@@ -1878,7 +1997,7 @@ window.Folio = window.Folio || {};
     const summary = !pid && topIds.length === 1
       ? `Created artboard ${q(store.get(topIds[0]).name)} (${allIds.length} layer${allIds.length === 1 ? '' : 's'})`
       : `Created ${allIds.length} layer${allIds.length === 1 ? '' : 's'}${where}`;
-    return result(out, summary, allIds);
+    return result(out, summary + (page && !isCurrent(page) ? ` on page ${q(page.name)}` : ''), allIds);
   }
 
   /** When a frame switches from flex to freeform, keep its children where they are on screen. */
@@ -3478,16 +3597,19 @@ window.Folio = window.Folio || {};
     if (!C || typeof C.addStarterKit !== 'function') return fail(NO_COMPONENTS, 'Components unavailable');
     const store = S();
     let ids;
+    let page = null;
     try {
-      ids = C.addStarterKit() || [];
+      page = homePage('Components', 'Components');
+      ids = onPage(page, () => C.addStarterKit()) || [];
     } catch (e) {
       return fail(`Could not add the starter kit: ${errText(e)}`, 'Starter kit failed');
     }
-    const board = store.doc.roots.map((id) => store.get(id)).find((n) => n && n.name === 'Components' && !n.instance && !n.component);
+    const board = allRoots().map((id) => store.get(id)).find((n) => n && n.name === 'Components' && !n.instance && !n.component);
     const changed = board ? [board.id, ...store.descendants(board.id)] : [];
     if (changed.length) afterMutation(changed, [board.id], ids.length ? [board.id] : null);
     const out = componentsOutline();
     out.artboard = board ? `${board.id} ${q(board.name)}` : null;
+    if (page) out.page = 'The kit is ' + pageNote(page);
     out.added = ids.length ? `${ids.length} component mains` : 'nothing new: the kit was already there';
     out.note = 'The kit follows the active brand kit. Restyle a main with update_nodes to change all its instances; place them with create_instances.';
     return result(out, ids.length ? `Added the starter kit (${ids.length} components)` : 'Starter kit already present', changed);
@@ -3619,46 +3741,50 @@ window.Folio = window.Folio || {};
     const light = V.toDataUrl(c.svg);
     const dark = vers && typeof vers['on-dark'] === 'string' ? V.toDataUrl(vers['on-dark']) : light;
 
-    let board = store.doc.roots.map((id) => store.get(id)).find((n) => n && n.type === 'frame' && n.name === LOGO_BOARD && !n.instance && !n.component);
-    const created = [];
-    if (!board) {
-      const spot = nextArtboardSpot();
-      board = store.buildFromTree({
-        type: 'frame',
-        name: LOGO_BOARD,
-        x: spot.x,
-        y: spot.y,
-        width: 1440,
-        height: 800,
-        sizing: { w: 'fixed', h: 'hug' },
-        layout: { mode: 'flex', direction: 'row', wrap: true, gap: 32, padding: [48, 48, 48, 48], align: 'flex-start' },
-        style: { fills: [{ type: 'solid', color: '#e9e8e4', visible: true }], clip: true },
-      });
-      created.push(board.id);
-    }
-    const old = board.children.map((id) => store.get(id)).find((n) => n && n.name && keyOf(n.name) === keyOf(CARD_PREFIX + name));
-    let index;
-    if (old) {
-      index = board.children.indexOf(old.id);
-      store.remove([old.id]);
-    }
-    const ctx = makeCtx('create');
-    const info = { seen: new WeakSet(), count: 0, truncated: 0, fonts: new Set(), parentId: board.id, parentFlex: true, parentDir: 'row' };
-    const clean = cleanTree(cardTree(name, concept, light, dark, ratio), ctx, info, 0, null, LOGO_BOARD);
-    const card = store.buildFromTree(clean[0], board.id, index);
-    const ids = [card.id, ...store.descendants(card.id)];
-    const logoId = ids.find((id) => store.get(id).type === 'image');
-    afterMutation(created.concat(ids), [card.id], created.length ? created : null);
-    const out = {
-      card: card.id,
-      image: logoId,
-      artboard: `${board.id} ${q(LOGO_BOARD)}`,
-      viewBox: w && h ? [r2(w), r2(h)] : undefined,
-      next: `Screenshot ${board.id} to judge every draft at once (readable at 16 px? still clear reversed?). To keep one, call save_logo with "node_id": "${logoId}".`,
-    };
-    if (old) out.replaced = `the earlier draft ${q(name)} (${old.id})`;
-    if (warnings.length) out.warnings = warnings.slice(0, MAX_WARNINGS);
-    return result(out, `${old ? 'Redrew' : 'Drafted'} logo ${q(name)}`, ids);
+    const page = homePage(LOGO_BOARD, 'Logos');
+    return onPage(page, () => {
+      let board = store.doc.roots.map((id) => store.get(id)).find((n) => n && n.type === 'frame' && n.name === LOGO_BOARD && !n.instance && !n.component);
+      const created = [];
+      if (!board) {
+        const spot = nextArtboardSpot();
+        board = store.buildFromTree({
+          type: 'frame',
+          name: LOGO_BOARD,
+          x: spot.x,
+          y: spot.y,
+          width: 1440,
+          height: 800,
+          sizing: { w: 'fixed', h: 'hug' },
+          layout: { mode: 'flex', direction: 'row', wrap: true, gap: 32, padding: [48, 48, 48, 48], align: 'flex-start' },
+          style: { fills: [{ type: 'solid', color: '#e9e8e4', visible: true }], clip: true },
+        });
+        created.push(board.id);
+      }
+      const old = board.children.map((id) => store.get(id)).find((n) => n && n.name && keyOf(n.name) === keyOf(CARD_PREFIX + name));
+      let index;
+      if (old) {
+        index = board.children.indexOf(old.id);
+        store.remove([old.id]);
+      }
+      const ctx = makeCtx('create');
+      const info = { seen: new WeakSet(), count: 0, truncated: 0, fonts: new Set(), parentId: board.id, parentFlex: true, parentDir: 'row' };
+      const clean = cleanTree(cardTree(name, concept, light, dark, ratio), ctx, info, 0, null, LOGO_BOARD);
+      const card = store.buildFromTree(clean[0], board.id, index);
+      const ids = [card.id, ...store.descendants(card.id)];
+      const logoId = ids.find((id) => store.get(id).type === 'image');
+      afterMutation(created.concat(ids), [card.id], created.length ? created : null);
+      const out = {
+        card: card.id,
+        image: logoId,
+        artboard: `${board.id} ${q(LOGO_BOARD)}`,
+        viewBox: w && h ? [r2(w), r2(h)] : undefined,
+        next: `Screenshot ${board.id} to judge every draft at once (readable at 16 px? still clear reversed?). To keep one, call save_logo with "node_id": "${logoId}".`,
+      };
+      if (old) out.replaced = `the earlier draft ${q(name)} (${old.id})`;
+      if (page && !isCurrent(page)) out.page = `The drafts are ${pageNote(page)}; screenshotting the artboard switches the view there.`;
+      if (warnings.length) out.warnings = warnings.slice(0, MAX_WARNINGS);
+      return result(out, `${old ? 'Redrew' : 'Drafted'} logo ${q(name)}`, ids);
+    });
   }
 
   async function saveLogo(input) {
@@ -3749,6 +3875,74 @@ window.Folio = window.Folio || {};
     return result(out, `Saved logo ${q(name)} to ${q(brand.name)}`, []);
   }
 
+  // ---------- pages ----------
+  const PAGE_ACTIONS = ['list', 'create', 'switch', 'rename', 'delete', 'move'];
+  const PAGE_ACTION_ALIASES = { add: 'create', new: 'create', open: 'switch', go: 'switch', show: 'switch', remove: 'delete', reorder: 'move' };
+  const pageName = (v) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, 60) : '');
+
+  function managePages(input) {
+    if (!pagesOn()) return fail('Pages are not available in this build of Folio; every artboard is on one canvas.', 'Pages unavailable');
+    const store = S();
+    const raw = typeof input.action === 'string' ? input.action.trim().toLowerCase() : '';
+    const action = PAGE_ACTIONS.includes(raw) ? raw : PAGE_ACTION_ALIASES[raw];
+    if (!action) return fail(`manage_pages needs "action": one of ${PAGE_ACTIONS.join(', ')}.`, 'Bad page action');
+    const name = pageName(input.name);
+    const taken = (nm, except) => store.pages().find((p) => p !== except && String(p.name).toLowerCase() === nm.toLowerCase());
+    const index = (len) => (input.index == null || !isFinite(Number(input.index)) ? undefined : clamp(Math.round(Number(input.index)), 0, len));
+    const done = (msg, summary) => result({ done: msg, pages: pagesOutline(false) }, summary, []);
+    if (action === 'list') return result({ pages: pagesOutline(true) }, `Listed ${store.pages().length} pages`, []);
+    if (action === 'create') {
+      const dup = name && taken(name);
+      if (dup) return fail(`A page named ${q(dup.name)} already exists (${dup.id}). Switch to it, or pick another name.`, 'Page exists');
+      const p = store.addPage(name || undefined, { index: index(store.pages().length), activate: true });
+      return done(`Created page ${pageTag(p)} and switched the view to it. New artboards (create_nodes with parent_id null) go here.`, `Created page ${q(p.name)}`);
+    }
+    const pr = findPage(input.page_id != null ? input.page_id : action === 'switch' || action === 'delete' ? input.name : undefined);
+    if (pr.error) return fail(pr.error, 'Page not found');
+    const page = pr.page;
+    if (action === 'switch') {
+      if (isCurrent(page)) return result({ done: `The user is already viewing ${pageTag(page)}.`, pages: pagesOutline(false) }, `Already on ${q(page.name)}`, []);
+      store.switchPage(page.id);
+      return done(`Switched the view to ${pageTag(page)}. New artboards go here; get_document shows its artboards.`, `Switched to page ${q(page.name)}`);
+    }
+    if (action === 'rename') {
+      if (!name) return fail('rename needs "name": the new page name.', 'Bad page name');
+      const dup = taken(name, page);
+      if (dup) return fail(`Another page is already called ${q(dup.name)} (${dup.id}).`, 'Page exists');
+      const was = page.name;
+      store.renamePage(page.id, name);
+      return done(`Renamed ${q(was)} to ${q(page.name)}.`, `Renamed page to ${q(page.name)}`);
+    }
+    if (action === 'delete') {
+      if (store.pages().length <= 1) return fail(`${pageTag(page)} is the only page, and a document needs at least one. Rename it instead.`, 'Cannot delete the last page');
+      const boards = page.roots.filter((id) => store.get(id));
+      if (boards.length && !yes(input.confirm))
+        return fail(`${pageTag(page)} has ${boards.length} artboard${boards.length === 1 ? '' : 's'} (${boards.slice(0, 10).map(boardLine).join('; ')}${boards.length > 10 ? '; …' : ''}). Deleting the page deletes them and everything inside. Ask the user first, then call again with "confirm": true. Nothing was deleted.`, 'Page has artboards');
+      store.removePage(page.id);
+      return done(`Deleted page ${q(page.name)}${boards.length ? ` and its ${boards.length} artboard${boards.length === 1 ? '' : 's'}` : ''}. The user is now viewing ${pageTag(store.currentPage())}.`, `Deleted page ${q(page.name)}`);
+    }
+    // move: artboards to page_id, or the page itself to index
+    const refs = asList(input.node_ids);
+    if (refs.length) {
+      const ids = [];
+      const errs = [];
+      refs.slice(0, 200).forEach((ref) => {
+        const r = resolve(ref);
+        if (r.error) errs.push(r.error);
+        else if (r.node.parent) errs.push(`${describeNode(r.node.id)} is not an artboard; only artboards move between pages (its artboard is ${store.rootOf(r.node.id)})`);
+        else if (!ids.includes(r.node.id) && (store.pageOf(r.node.id) || {}).id !== page.id) ids.push(r.node.id);
+      });
+      if (errs.length) return fail(errs.slice(0, 8).join(' ') + ' Nothing was moved.', 'Cannot move to page');
+      if (!ids.length) return done(`Those artboards are already on ${pageTag(page)}.`, 'Nothing to move');
+      store.moveToPage(ids, page.id);
+      return done(`Moved ${ids.length} artboard${ids.length === 1 ? '' : 's'} to ${pageTag(page)}${isCurrent(page) ? '' : '; the view stays on ' + q(store.currentPage().name)}.`, `Moved ${ids.length} artboard${ids.length === 1 ? '' : 's'} to ${q(page.name)}`);
+    }
+    const to = index(store.pages().length - 1);
+    if (to == null) return fail('move needs "node_ids" (artboards to move to page_id) or "index" (the new position of page page_id, 0 = first).', 'Bad page move');
+    store.movePage(page.id, to);
+    return done(`Moved page ${q(page.name)} to position ${to}.`, `Reordered pages`);
+  }
+
   const HANDLERS = {
     get_document: getDocument,
     get_tree: getTree,
@@ -3766,6 +3960,7 @@ window.Folio = window.Folio || {};
     add_starter_kit: addStarterKit,
     draft_logo: draftLogo,
     save_logo: saveLogo,
+    manage_pages: managePages,
   };
 
   async function execute(name, input) {
@@ -3773,7 +3968,10 @@ window.Folio = window.Folio || {};
       if (!S()) return fail('Folio is not ready yet.', 'Folio not ready');
       const fn = own(HANDLERS, name) ? HANDLERS[name] : null;
       if (!fn) return fail(`Unknown tool ${q(name)}. Available tools: ${Object.keys(HANDLERS).join(', ')}.`, 'Unknown tool');
-      return await fn(parseInput(input));
+      const inp = parseInput(input);
+      const note = FOLLOW_TOOLS.has(name) ? followPage(inp) : '';
+      const res = await fn(inp);
+      return note ? withNote(res, note) : res;
     } catch (e) {
       console.error('[Folio] AI tool failed', name, e);
       return fail(`Folio hit an internal error while running ${name}: ${(e && e.message) || e}. Some changes may have been applied — call get_document to check.`, `${name} failed`);

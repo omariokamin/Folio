@@ -114,8 +114,35 @@ window.Folio = window.Folio || {};
     { group: 'Social', name: 'YouTube Thumbnail', width: 1280, height: 720 },
   ];
 
+  const pid = () => 'p_' + Math.random().toString(36).slice(2, 8);
   function emptyDoc() {
-    return { version: 1, name: 'Untitled', nodes: {}, roots: [] };
+    const page = { id: pid(), name: 'Page 1', roots: [] };
+    return { version: 1, name: 'Untitled', nodes: {}, roots: page.roots, pages: [page], page: page.id };
+  }
+
+  /**
+   * Make `doc.pages` valid and bind `doc.roots` to the current page (the SAME array). Old documents
+   * (no pages) become one "Page 1". Unknown ids are dropped, a root lives on one page only, and roots
+   * that only `doc.roots` lists (hand-edited files) join the current page. `preferId` wins when it exists.
+   */
+  function bindPages(d, preferId) {
+    if (!Array.isArray(d.roots)) d.roots = [];
+    if (!Array.isArray(d.pages) || !d.pages.some(isObj)) d.pages = [{ id: pid(), name: 'Page 1', roots: d.roots }];
+    const seen = new Set();
+    const ids = new Set();
+    d.pages = d.pages.filter(isObj);
+    d.pages.forEach((p, i) => {
+      if (typeof p.id !== 'string' || !p.id || ids.has(p.id)) p.id = pid();
+      ids.add(p.id);
+      p.name = typeof p.name === 'string' && p.name.trim() ? p.name : 'Page ' + (i + 1);
+      p.roots = (Array.isArray(p.roots) ? p.roots : []).filter((id) => d.nodes[id] && !seen.has(id) && seen.add(id));
+      if (p.viewport && !isObj(p.viewport)) delete p.viewport;
+    });
+    const cur = d.pages.find((p) => p.id === preferId) || d.pages.find((p) => p.id === d.page) || d.pages[0];
+    d.roots.forEach((id) => d.nodes[id] && !seen.has(id) && (seen.add(id), cur.roots.push(id)));
+    d.page = cur.id;
+    d.roots = cur.roots;
+    return d;
   }
 
   // ---------- the store ----------
@@ -157,7 +184,10 @@ window.Folio = window.Folio || {};
     /** Siblings array (ids) that contains `id` — either parent.children or doc.roots. */
     siblingsOf(id) {
       const p = this.getParent(id);
-      return p ? p.children : this.doc.roots;
+      if (p) return p.children;
+      if (this.doc.roots.includes(id)) return this.doc.roots;
+      const pg = (this.doc.pages || []).find((pg) => pg.roots.includes(id));
+      return pg ? pg.roots : this.doc.roots;
     },
     /** Ancestors from the root down to (not including) the node. */
     ancestors(id) {
@@ -411,10 +441,155 @@ window.Folio = window.Folio || {};
       this.emit('viewport', this.viewport);
     },
 
+    // ----- pages (SPEC "Pages (v0.6)"); doc.roots is always the current page's roots array -----
+    pages() {
+      return this.doc.pages;
+    },
+    currentPage() {
+      return this.doc.pages.find((p) => p.id === this.doc.page) || this.doc.pages[0];
+    },
+    page(id) {
+      return this.doc.pages.find((p) => p.id === id) || null;
+    },
+    /** The page holding the artboard that contains `nodeId` (null for unknown ids). */
+    pageOf(nodeId) {
+      if (!this.get(nodeId)) return null;
+      const r = this.rootOf(nodeId);
+      return this.doc.pages.find((p) => p.roots.includes(r)) || null;
+    },
+    _rebind() {
+      this.doc.roots = this.currentPage().roots;
+      this.doc.page = this.currentPage().id;
+    },
+    addPage(name, { index, activate = false } = {}) {
+      const taken = new Set(this.doc.pages.map((p) => p.name));
+      let n = this.doc.pages.length + 1;
+      while (!name && taken.has('Page ' + n)) n++;
+      const page = { id: pid(), name: String(name || '').trim() || 'Page ' + n, roots: [] };
+      const list = this.doc.pages;
+      if (index === undefined || index < 0 || index > list.length) list.push(page);
+      else list.splice(index, 0, page);
+      if (activate) this.switchPage(page.id);
+      else this.emit('change');
+      return page;
+    },
+    renamePage(id, name) {
+      const p = this.page(id);
+      name = String(name || '').trim();
+      if (!p || !name || p.name === name) return false;
+      p.name = name;
+      this.emit('change');
+      return true;
+    },
+    /** Delete a page and its layers (through remove, so component rules apply). Refuses the last page. */
+    removePage(id) {
+      const p = this.page(id);
+      const list = this.doc.pages;
+      if (!p || list.length < 2) return false;
+      const i = list.indexOf(p);
+      if (p.id === this.doc.page) this.switchPage((list[i + 1] || list[i - 1]).id);
+      if (p.roots.length) this.remove(p.roots.slice());
+      list.splice(list.indexOf(p), 1);
+      this.emit('change');
+      return true;
+    },
+    movePage(id, index) {
+      const list = this.doc.pages;
+      const p = this.page(id);
+      if (!p) return false;
+      list.splice(list.indexOf(p), 1);
+      list.splice(Math.max(0, Math.min(list.length, index)), 0, p);
+      this.emit('change');
+      return true;
+    },
+    /** Copy a page (and its artboards) right after it. Returns the new page; does not switch to it. */
+    duplicatePage(id) {
+      const p = this.page(id);
+      if (!p) return null;
+      const copy = this.addPage(p.name + ' copy', { index: this.doc.pages.indexOf(p) + 1 });
+      if (p.viewport) copy.viewport = clone(p.viewport);
+      const trees = p.roots.map((r) => this.toTree(r));
+      this.withPage(copy.id, () => trees.forEach((t) => this.buildFromTree(t)));
+      return copy;
+    },
+    /** Show another page: remembers this page's viewport, clears the selection, emits 'page' then 'change'. */
+    switchPage(id) {
+      const to = this.page(id);
+      if (!to) return null;
+      if (to.id === this.doc.page && this.doc.roots === to.roots) return to;
+      const from = this.currentPage();
+      if (from && from !== to) {
+        from.viewport = { x: this.viewport.x, y: this.viewport.y, zoom: this.viewport.zoom };
+        this._prevPage = from.id;
+      }
+      this.doc.page = to.id;
+      this._rebind();
+      this.editingTextId = null;
+      this.hoverId = null;
+      this.selection = [];
+      this.emit('selection');
+      this.emit('page', to);
+      this.emit('change');
+      this.scheduleSave();
+      return to;
+    },
+    /** Run fn with doc.roots bound to another page (no 'page' event), e.g. to build artboards there. */
+    withPage(id, fn) {
+      const p = this.page(id);
+      if (!p) throw new Error('Unknown page "' + id + '".');
+      const prev = this.doc.roots;
+      const outer = prev !== this.currentPage().roots; // nested inside another withPage
+      this.doc.roots = p.roots;
+      try {
+        return fn(p);
+      } finally {
+        // restore the outer binding (if its page still exists), else the current page
+        if (outer && this.doc.pages.some((pg) => pg.roots === prev)) this.doc.roots = prev;
+        else this._rebind();
+      }
+    },
+    /** The page with this name (created at the end, not switched to, when missing). */
+    ensurePage(name) {
+      return this.doc.pages.find((p) => p.name === name) || this.addPage(name);
+    },
+    /** Move artboards (roots only) to another page, placed to the right of its artboards. Returns moved ids. */
+    moveToPage(rootIds, pageId) {
+      const to = this.page(pageId);
+      if (!to) return [];
+      const ids = [].concat(rootIds).filter((id) => {
+        const n = this.get(id);
+        return n && !n.parent && !to.roots.includes(id);
+      });
+      if (!ids.length) return [];
+      const rect = (id) => (Folio.canvas && Folio.canvas.nodeRect && Folio.canvas.nodeRect(id)) || this.get(id);
+      let dx = 0;
+      let dy = 0;
+      if (to.roots.length) {
+        const there = to.roots.map(rect);
+        const here = ids.map(rect);
+        dx = Math.round(Math.max(...there.map((r) => r.x + r.width)) + 100 - Math.min(...here.map((r) => r.x)));
+        dy = Math.round(Math.min(...there.map((r) => r.y)) - Math.min(...here.map((r) => r.y)));
+      }
+      ids.forEach((id) => {
+        const sib = this.siblingsOf(id);
+        const i = sib.indexOf(id);
+        if (i >= 0) sib.splice(i, 1);
+        to.roots.push(id);
+        const n = this.get(id);
+        n.x += dx;
+        n.y += dy;
+      });
+      const gone = new Set(ids);
+      this.selection = this.selection.filter((id) => !gone.has(this.rootOf(id)));
+      this.emit('selection');
+      this.emit('change');
+      return ids;
+    },
+
     // ----- history -----
     /** Record an undo step (call at the END of a gesture) and autosave. */
     commit(label = '') {
-      const snap = JSON.stringify(this.doc);
+      const snap = this._historyJson();
       if (this.history[this.historyIndex] === snap) return;
       this.history = this.history.slice(0, this.historyIndex + 1);
       this.history.push(snap);
@@ -439,10 +614,37 @@ window.Folio = window.Folio || {};
       this.historyIndex++;
       this._restore();
     },
+    /**
+     * The doc as JSON without view state (current page, page viewports, and doc.roots — the current
+     * page's copy): switching pages is not an undo step. _restore rebinds them.
+     */
+    _historyJson() {
+      const d = this.doc;
+      const { page, roots } = d;
+      const vps = (d.pages || []).map((p) => p.viewport);
+      delete d.page;
+      delete d.roots;
+      (d.pages || []).forEach((p) => delete p.viewport);
+      try {
+        return JSON.stringify(d);
+      } finally {
+        d.roots = roots;
+        d.page = page;
+        (d.pages || []).forEach((p, i) => vps[i] && (p.viewport = vps[i]));
+      }
+    },
     _restore() {
-      this.doc = JSON.parse(this.history[this.historyIndex]);
-      this.selection = this.selection.filter((id) => this.doc.nodes[id]);
+      const was = this.doc.page;
+      const vps = {};
+      (this.doc.pages || []).forEach((p) => p.viewport && (vps[p.id] = p.viewport));
+      const d = JSON.parse(this.history[this.historyIndex]);
+      // stay on this page; if the undo removed it, go back to the page visited before it
+      const has = (id) => Array.isArray(d.pages) && d.pages.some((p) => p && p.id === id);
+      this.doc = bindPages(d, has(was) ? was : this._prevPage);
+      this.doc.pages.forEach((p) => vps[p.id] && (p.viewport = vps[p.id]));
+      this.selection = this.selection.filter((id) => this.doc.nodes[id] && this.pageOf(id) === this.currentPage());
       this.editingTextId = null;
+      if (this.doc.page !== was) this.emit('page', this.currentPage());
       this.emit('change');
       this.emit('selection');
       this.emit('history');
@@ -451,9 +653,9 @@ window.Folio = window.Folio || {};
 
     // ----- documents & saving -----
     load(doc) {
-      this.doc = doc && doc.nodes && doc.roots ? doc : emptyDoc();
+      this.doc = bindPages(doc && doc.nodes && (doc.roots || doc.pages) ? doc : emptyDoc());
       this.selection = [];
-      this.history = [JSON.stringify(this.doc)];
+      this.history = [this._historyJson()];
       this.historyIndex = 0;
       this.emit('change');
       this.emit('selection');

@@ -147,6 +147,12 @@ when you ask. Before using one for real, check that nobody else has registered s
   main, so for a copy that looks different Claude adds a variant. To change a single copy
   completely, ask Claude to **detach** it so it becomes ordinary layers.
 
+**Pages.** A document can have several pages ("Website", "Social", "Ideas"), each with its own
+artboards. Claude works on the page you're looking at, unless you ask ("put the posts on a Social
+page"). The starter components go on a **Components** page and logo drafts on a **Logos** page
+automatically. When Claude edits or checks something on another page, Folio switches to that page
+so you can follow along. Claude asks before deleting a page that still has designs on it.
+
 **Your work is saved in the browser.** Folio autosaves in the browser tab at `localhost:4317`.
 That copy is separate from the one you get by double-clicking `index.html`, so use
 **File → Save to file** to keep a `.folio.json` file you can open anywhere.

@@ -1146,7 +1146,24 @@ window.Folio = window.Folio || {};
     return Object.keys(props).reduce((acc, k) => acc.flatMap((v) => props[k].map((val) => ({ ...v, [k]: val }))), [{}]);
   }
 
+  /** The kit lives on the "Components" page (or wherever an existing kit board already is). */
   const addStarterKit = mutation(function () {
+    const st = S();
+    if (!st.withPage) return buildKit();
+    const isBoard = (id) => {
+      const n = node(id);
+      return n && n.type === 'frame' && n.name === 'Components' && !n.parent && !n.instance && !n.component;
+    };
+    const had = st.pages().find((p) => p.roots.some(isBoard)) || st.pages().find((p) => p.name === 'Components');
+    const page = had || st.ensurePage('Components');
+    try {
+      return st.withPage(page.id, buildKit);
+    } catch (e) {
+      if (!had) st.removePage(page.id); // the page was made for this call: don't leave it (or a half-built kit) behind
+      throw e;
+    }
+  });
+  function buildKit() {
     const st = S();
     const t = kitTokens();
     const created = [];
@@ -1188,7 +1205,7 @@ window.Folio = window.Folio || {};
       });
     });
     return created;
-  });
+  }
 
   // ---------- init ----------
   let inited = false;
