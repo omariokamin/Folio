@@ -1801,10 +1801,16 @@ window.Folio = window.Folio || {};
     return result(out, moved.length ? summary : 'Nothing moved', moved, !moved.length);
   }
 
+  // requestAnimationFrame never fires in a background tab (the Claude Code bridge often runs in one),
+  // so always race it against a timer.
   const nextFrame = () =>
     new Promise((res) => {
-      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => res());
-      else setTimeout(res, 16);
+      const t = setTimeout(res, 100);
+      if (typeof requestAnimationFrame === 'function')
+        requestAnimationFrame(() => {
+          clearTimeout(t);
+          res();
+        });
     });
   const timeout = (p, ms) => Promise.race([p, new Promise((res) => setTimeout(res, ms))]);
 
