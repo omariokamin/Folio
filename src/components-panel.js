@@ -85,7 +85,7 @@ window.Folio = window.Folio || {};
     const n = id && store.get(id);
     if (!k || !n) return;
     const r = k.instanceRootOf(id);
-    const comp = r ? k.get(store.get(r).instance.componentId) : k.get(id);
+    const comp = r ? k.get(store.get(r).instance.componentId) : k.componentOf(k.mainRootOf(id));
     if (!comp || !store.get(comp.mainId)) return toast('The main component is gone — this copy can only be detached.', 'error');
     const target = n.sourceId && store.get(n.sourceId) && k.mainRootOf(n.sourceId) ? n.sourceId : comp.mainId;
     store.select([target]);

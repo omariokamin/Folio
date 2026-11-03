@@ -320,10 +320,10 @@ Layers link to the active kit with tokens, written where the literal value would
 
 Linked layers update by themselves when the kit is edited or the document switches kits.
 
-Core colours always exist: primary (buttons, links, highlights), secondary (dark sections, supporting colour), accent (small details), background (page and artboard), surface (cards and panels), text, muted (secondary text, captions, borders), success (confirmations, positive states) and danger (errors, destructive actions, warnings). Kits can add custom colours (ids like c_ab12) and fonts (ids like f_ab12). Core fonts: heading (headlines and titles) and body (paragraphs, buttons and UI text).
+Core colours always exist: primary (buttons, links, highlights), on-primary (text and icons on primary fills, such as button labels), secondary (dark sections, supporting colour), accent (small details), background (page and artboard), surface (cards and panels), text, muted (secondary text, captions, borders), success (confirmations, positive states) and danger (errors, destructive actions, warnings). Kits can add custom colours (ids like c_ab12) and fonts (ids like f_ab12). Core fonts: heading (headlines and titles) and body (paragraphs, buttons and UI text).
 
 When a kit is active:
-- Use tokens for every colour, font and radius with a brand role instead of its literal value: the artboard fill is var(--color-background), main buttons var(--color-primary), body copy var(--color-text), captions var(--color-muted), headlines var(--font-heading). Literals are fine for neutrals with no brand role and for translucent tints, which tokens cannot express (the brand hex plus an alpha suffix: #1f6f4a26 is 15%; it won't follow brand edits).
+- Use tokens for every colour, font and radius with a brand role instead of its literal value: the artboard fill is var(--color-background), main buttons var(--color-primary) with labels in var(--color-on-primary), body copy var(--color-text), captions var(--color-muted), headlines var(--font-heading). Literals are fine for neutrals with no brand role and for translucent tints, which tokens cannot express (the brand hex plus an alpha suffix: #1f6f4a26 is 15%; it won't follow brand edits).
 - Stay inside the kit's palette and fonts; the design rules still apply (the accent stays under about 5%).
 - Put the logo on designs that represent the brand (posts, ads, headers, footers) in the variant that suits the background ("on light" / "on dark"); without one, set the name in the heading font.
 - Write in the brand's voice: its tone, its tagline where it fits, its words to use, never its words to avoid.
@@ -336,7 +336,7 @@ When a kit is active:
 When no kit is active, design freely. If the user describes their brand or likes a look you made, offer to save it as a kit so future designs match.
 
 Creating and editing kits with set_brand:
-- New kit: {"create": true, "patch": {"name": "Halden Cycles", "colors": {"primary": "#1f4d3a", "secondary": "#2b2622", "accent": "#d9a441", "background": "#f2f0eb", "surface": "#e6e3dc", "text": "#1b1a18", "muted": "#5f5b55", "success": "#2f7a4a", "danger": "#b3261e"}, "fonts": {"heading": {"family": "Archivo", "weight": 700}, "body": "DM Sans"}, "voice": {"tagline": "…", "tone": ["plain-spoken", "practical"], "useWords": "repair, ride, fit", "avoidWords": "cheap"}, "style": {"button": "square", "density": "comfortable", "shadow": "none"}}}. It becomes the document's brand unless "activate" is false. Set all nine core colours, with strong contrast between text and background/surface.
+- New kit: {"create": true, "patch": {"name": "Halden Cycles", "colors": {"primary": "#1f4d3a", "on-primary": "#ffffff", "secondary": "#2b2622", "accent": "#d9a441", "background": "#f2f0eb", "surface": "#e6e3dc", "text": "#1b1a18", "muted": "#5f5b55", "success": "#2f7a4a", "danger": "#b3261e"}, "fonts": {"heading": {"family": "Archivo", "weight": 700}, "body": "DM Sans"}, "voice": {"tagline": "…", "tone": ["plain-spoken", "practical"], "useWords": "repair, ride, fit", "avoidWords": "cheap"}, "style": {"button": "square", "density": "comfortable", "shadow": "none"}}}. It becomes the document's brand unless "activate" is false. Set all ten core colours, with strong contrast between text and background/surface and between on-primary and primary (4.5:1).
 - Edit the active kit (or brand_id) by sending only what changes: {"patch": {"colors": [{"id": "primary", "value": "#163a2b"}]}}. Colours and fonts merge by id; an entry without a known id becomes a custom one (its id is returned); {"id": "c_ab12", "delete": true} removes a custom one. voice and style merge field by field; style.gradients replaces the list.
 - Logos: only from an https:// image URL the user gave you ({"name": "Logo on light", "src": "https://…"}); otherwise ask the user to upload them in the Brand panel.
 - Switch the document to a library kit: {"brand_id": "b_…", "activate": true, "patch": {}}.
@@ -539,7 +539,7 @@ ${JSON.stringify(EXAMPLE)}`;
               name: { type: 'string' },
               colors: {
                 type: ['array', 'object'],
-                description: 'Array of {id?, name?, value?, delete?}, or a map {"primary": "#1f4d3a", …}. Values are literal colours. Core ids: primary, secondary, accent, background, surface, text, muted, success, danger.',
+                description: 'Array of {id?, name?, value?, delete?}, or a map {"primary": "#1f4d3a", …}. Values are literal colours. Core ids: primary, on-primary, secondary, accent, background, surface, text, muted, success, danger.',
                 items: { type: 'object' },
               },
               fonts: {

@@ -1128,7 +1128,7 @@ window.Folio = window.Folio || {};
       hint: 'var(--color-muted)',
       field: 'var(--color-muted)',
       primary: 'var(--color-primary)',
-      onPrimary: readableOn(primary, [['var(--color-background)', background], ['#ffffff', [255, 255, 255]], [L.ink, rgbOf(L.ink)]]),
+      onPrimary: 'var(--color-on-primary)',
       ring: hex(primary) + '40',
       danger: 'var(--color-danger)',
       success: 'var(--color-success)',

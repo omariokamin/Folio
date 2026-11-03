@@ -226,6 +226,7 @@ window.Folio = window.Folio || {};
   // model) as tokens; Folio.brand turns them into CSS variables on the canvas.
   const CORE_COLORS = [
     ['primary', 'Primary', '#2563eb'],
+    ['on-primary', 'On primary', '#ffffff'],
     ['secondary', 'Secondary', '#0f172a'],
     ['accent', 'Accent', '#f59e0b'],
     ['background', 'Background', '#ffffff'],
@@ -243,7 +244,7 @@ window.Folio = window.Folio || {};
   const CORE_FONT_IDS = CORE_FONTS.map((f) => f[0]);
   const RADIUS_IDS = ['sm', 'md', 'lg'];
   const RADIUS_DEFAULTS = { sm: 6, md: 12, lg: 24 };
-  const COLOR_ALIASES = { brand: 'primary', main: 'primary', cta: 'primary', action: 'primary', second: 'secondary', highlight: 'accent', pop: 'accent', bg: 'background', page: 'background', canvas: 'background', paper: 'background', card: 'surface', panel: 'surface', elevated: 'surface', foreground: 'text', fg: 'text', ink: 'text', body: 'text', heading: 'text', subtle: 'muted', grey: 'muted', gray: 'muted', caption: 'muted', border: 'muted', ok: 'success', positive: 'success', green: 'success', error: 'danger', destructive: 'danger', warning: 'danger', red: 'danger' };
+  const COLOR_ALIASES = { brand: 'primary', main: 'primary', cta: 'primary', action: 'primary', second: 'secondary', highlight: 'accent', pop: 'accent', bg: 'background', page: 'background', canvas: 'background', paper: 'background', card: 'surface', panel: 'surface', elevated: 'surface', foreground: 'text', fg: 'text', ink: 'text', body: 'text', heading: 'text', subtle: 'muted', grey: 'muted', gray: 'muted', caption: 'muted', border: 'muted', onprimary: 'on-primary', on_primary: 'on-primary', onPrimary: 'on-primary', 'button-text': 'on-primary', 'button-label': 'on-primary', ok: 'success', positive: 'success', green: 'success', error: 'danger', destructive: 'danger', warning: 'danger', red: 'danger' };
   const FONT_ALIASES = { display: 'heading', headline: 'heading', headings: 'heading', title: 'heading', h1: 'heading', header: 'heading', primary: 'heading', text: 'body', paragraph: 'body', copy: 'body', base: 'body', secondary: 'body', ui: 'body' };
   const RADIUS_ALIASES = { s: 'sm', small: 'sm', xs: 'sm', xsmall: 'sm', m: 'md', medium: 'md', base: 'md', default: 'md', l: 'lg', large: 'lg', xl: 'lg', '2xl': 'lg', xxl: 'lg' };
 
@@ -2465,6 +2466,7 @@ window.Folio = window.Folio || {};
     next.fonts = listOf(next, 'fonts').map((f) => Object.assign({}, f));
     next.logos = listOf(next, 'logos').map((l) => Object.assign({}, l));
     CORE_COLORS.forEach(([id, name, value]) => {
+      if (id === 'on-primary') return; // left out on purpose: Folio.brand picks the readable one from primary
       if (!next.colors.some((c) => c.id === id)) next.colors.push({ id, name, value, core: true });
     });
     CORE_FONTS.forEach(([id, name, family, weight]) => {

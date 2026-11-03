@@ -208,7 +208,7 @@ updates every layer at once, and switching the document to another brand re-skin
 brand = {
   id: 'b_xxxxxx', name: 'Crumb Bakery', updatedAt: 1730000000000,
   colors: [ { id: 'primary', name: 'Primary', value: '#c2410c', core: true }, ... ],
-      // core ids (always present, can't be deleted): primary, secondary, accent, background, surface, text, muted, success, danger
+      // core ids (always present, can't be deleted): primary, on-primary, secondary, accent, background, surface, text, muted, success, danger
       // custom colours get ids like 'c_ab12' (stable; renaming changes only `name`)
   fonts:  [ { id: 'heading', name: 'Heading', family: 'Fraunces', weight: 700, core: true },
             { id: 'body',    name: 'Body',    family: 'DM Sans',  weight: 400, core: true }, ... ],
