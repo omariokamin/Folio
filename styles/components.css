@@ -1,0 +1,131 @@
+/*
+ * components.css — the Components tab (#components-panel, prefix .kp-) and the purple
+ * "component" accents used by the layers panel, canvas overlay and inspector.
+ */
+:root {
+  --comp: #a77bff;                      /* main components, instances, sets */
+  --comp-soft: rgba(167, 123, 255, 0.16);
+}
+
+#components-panel[hidden] { display: none !important; }
+.kp { font-size: 12px; color: var(--text); padding-bottom: 32px; }
+.kp button { font: inherit; }
+
+.kp-head {
+  position: sticky; top: 38px; z-index: 4; background: var(--panel);
+  display: flex; align-items: center; gap: 4px; height: 44px; padding: 0 6px 0 10px;
+  border-bottom: 1px solid var(--line);
+}
+.kp-search { height: 28px; user-select: text; }
+.kp.is-empty .kp-head { display: none; }
+
+.kp-list { padding: 4px 0; }
+.kp-none { padding: 16px 14px; margin: 0; }
+
+.kp-group { padding: 6px 10px 10px; }
+.kp-group + .kp-group { border-top: 1px solid var(--line); }
+.kp-group__head { display: flex; align-items: center; gap: 2px; min-height: 26px; margin-bottom: 6px; }
+.kp-group.is-collapsed .kp-group__head { margin-bottom: 0; }
+.kp-group__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 11px; }
+.kp-group__head > .kp-group__name { padding-left: 2px; }
+.kp-group__toggle {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; height: 24px; padding: 0 4px 0 0; margin-left: -2px;
+  border: 0; border-radius: 4px; background: transparent; color: var(--text); cursor: pointer; text-align: left;
+}
+.kp-group__toggle:hover { background: var(--panel-2); }
+.kp-group__toggle .f-icon { width: 12px; height: 12px; color: var(--text-3); flex-shrink: 0; }
+.kp-group__count { color: var(--text-3); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.kp-more { width: 24px !important; height: 24px !important; }
+
+.kp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.kp-tile { position: relative; min-width: 0; }
+.kp-tile.is-wide { grid-column: span 2; }
+.kp-tile > .kp-more { position: absolute; top: 3px; right: 3px; opacity: 0; background: rgba(17,17,19,.72) !important; color: #fff !important; width: 22px !important; height: 22px !important; }
+.kp-tile:hover > .kp-more, .kp-tile > .kp-more:focus-visible, .kp-tile > .kp-more.is-open { opacity: 1; }
+.kp-tile__btn {
+  width: 100%; display: flex; flex-direction: column; gap: 4px; padding: 0; border: 0; background: transparent;
+  color: var(--text-2); cursor: grab; text-align: left; border-radius: var(--radius);
+}
+.kp-tile__btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.kp-tile__name { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.kp-tile__btn:hover .kp-tile__name { color: var(--text); }
+
+.kp-thumb {
+  position: relative; height: 64px; overflow: hidden; display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); border-radius: var(--radius); background: #f4f4f6; color: var(--text-3);
+  pointer-events: none; transition: border-color .1s, box-shadow .1s;
+}
+.kp-tile__btn:hover .kp-thumb { border-color: var(--comp); box-shadow: 0 0 0 1px var(--comp); }
+.kp-tile__btn:active .kp-thumb { transform: scale(.98); }
+.kp-thumb__in { position: absolute; left: 50%; top: 50%; transform-origin: 50% 50%; }
+.kp-thumb * { pointer-events: none !important; -webkit-user-drag: none; }
+
+.kp-ghost {
+  position: fixed; left: 0; top: 0; z-index: 950; width: 104px; pointer-events: none; opacity: .85;
+  border-radius: var(--radius); box-shadow: 0 10px 30px rgba(0,0,0,.45);
+}
+.kp-ghost.is-over { opacity: .95; }
+.kp-ghost .kp-thumb { border-color: var(--comp); }
+html.kp-dragging, html.kp-dragging * { cursor: grabbing !important; }
+
+.kp-empty .f-hint { margin: 0; line-height: 1.5; }
+.kp-empty__kit { align-self: flex-start; }
+.kp-empty__kit .f-icon { width: 14px; height: 14px; }
+
+/* ---------- layers panel ---------- */
+.ly-row.is-comp .ly-row__icon, .ly-row.is-comp .ly-row__name { color: var(--comp); }
+.ly-row.is-comp.is-selected .ly-row__icon { color: var(--comp); }
+.ly-row.is-instance .ly-row__icon, .ly-row.is-instance.is-selected .ly-row__icon { color: var(--comp); }
+.ly-row.is-in-instance .ly-row__icon, .ly-row.is-in-instance .ly-row__name { color: #c4b0ef; }
+.ly-row.is-in-instance .ly-row__icon { opacity: .75; }
+.ly-row .f-icon.is-filled { fill: currentColor; }
+
+/* ---------- canvas overlay ---------- */
+.f-ov-label.is-comp { color: var(--comp) !important; }
+.f-ov-label.is-main::before { content: '\25C6'; margin-right: 4px; font-size: 9px; vertical-align: 1px; }
+.f-ov-label.is-set::before { content: '\2756'; margin-right: 4px; font-size: 10px; }
+.f-ov-label.is-inner { font-size: 11px; height: 16px; line-height: 15px; }
+.f-ov-sel.is-comp, .f-ov-hover.is-comp { border-color: var(--comp); }
+.f-ov-handle.is-comp { border-color: var(--comp); }
+.f-ov-badge.is-comp { background: var(--comp); }
+
+/* ---------- inspector ---------- */
+.ins-sec.is-readonly :is(input, select, textarea, button):disabled,
+.ins-sec.is-readonly .is-disabled,
+.ins-header .f-input:disabled { opacity: .45; }
+.ins-sec.is-readonly .is-disabled :disabled { opacity: 1; }
+.ins-sec.is-readonly .ins-scrub { cursor: default; }
+.ins-ro-hint { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; color: var(--text-3); font-size: 11px; line-height: 1.35; }
+.ins-ro-hint .f-icon { width: 12px; height: 12px; flex-shrink: 0; color: var(--comp); }
+.ins .f-input:disabled, .ins .f-select:disabled { cursor: not-allowed; }
+.ins-header__icon.is-comp { background: var(--comp-soft); color: var(--comp); }
+.ins-header__icon .f-icon.is-filled { fill: currentColor; }
+.ins-kc { border-left: 2px solid var(--comp); }
+.ins-kc__name { display: flex; align-items: center; gap: 6px; min-width: 0; font-weight: 600; font-size: 12px; }
+.ins-kc__name > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ins-kc__name .f-icon { color: var(--comp); }
+.ins-kc__prop { display: grid; grid-template-columns: 72px 1fr; align-items: center; gap: 6px; margin-bottom: 6px; }
+.ins-kc__prop > .f-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ins-kc__vals { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.ins-kc__chip {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 2px 0 8px; border-radius: 11px;
+  background: var(--panel-2); color: var(--text); font-size: 11px; max-width: 100%;
+}
+.ins-kc__chip.is-current { background: var(--comp-soft); color: #d9c8ff; }
+.ins-kc__chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: text; }
+.ins-kc__chip > button { border: 0; background: transparent; color: var(--text-3); cursor: pointer; padding: 0 5px; font-size: 13px; line-height: 1; }
+.ins-kc__chip > button:hover { color: var(--danger); }
+.ins-kc__chip input { width: 70px; height: 20px; padding: 0 4px; font-size: 11px; }
+.ins-kc__propname { height: 24px; font-weight: 500; }
+.ins-kc__add { height: 22px !important; padding: 0 6px !important; color: var(--text-2); font-size: 11px; }
+.ins-kc__ovr { display: flex; align-items: center; gap: 4px; min-height: 26px; padding: 0 0 0 8px; margin: 0 -4px 2px; border-radius: var(--radius); background: var(--panel-2); }
+.ins-kc__ovr > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
+.ins-kc__ovr b { color: var(--text); font-weight: 500; }
+.ins-kc__btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.ins-kc__btns .f-btn { flex: 1; }
+.ins-kc__desc { min-height: 44px; }
+.ins-kc__sub { margin: 10px 0 6px; font-size: 10px !important; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3) !important; }
+.ins-kc__propblock { padding: 8px; margin: 0 -4px 6px; border-radius: var(--radius); background: rgba(255,255,255,.02); border: 1px solid var(--line); }
+.ins-kc__propblock .ins-kc__vals { margin-top: 2px; }
+.ins-kc__chip > button:disabled { opacity: .3; cursor: not-allowed; }
+.ins-kc__chip > button:disabled:hover { color: var(--text-3); }

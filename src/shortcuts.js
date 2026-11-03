@@ -19,6 +19,24 @@ window.Folio = window.Folio || {};
   function topLevel(ids = store.selection) {
     return ids.filter((id) => store.get(id) && !ids.some((o) => o !== id && store.isAncestor(o, id)));
   }
+  const KP = () => Folio.componentsPanel;
+  const inInstance = (id) => !!(KP() && KP().inInstance(id));
+  /** Structure inside an instance follows its main: refuse (with a hint) edits that would change it. */
+  function lockedByInstance(ids) {
+    if (!ids.some(inInstance)) return false;
+    Folio.ui.toast('Edit the main component to change this');
+    return true;
+  }
+  /** The outermost instance that `id` is (or sits inside), or null. */
+  function outerInstance(id) {
+    const K = Folio.components;
+    let r = K && store.get(id) ? K.instanceRootOf(id) : null;
+    while (r && !K.isDirectInstance(r)) {
+      const p = store.get(r).parent;
+      r = p ? K.instanceRootOf(p) : null;
+    }
+    return r || null;
+  }
   const isFlexChild = (id) => {
     const p = store.getParent(id);
     return !!(p && p.layout && p.layout.mode === 'flex');
@@ -29,12 +47,17 @@ window.Folio = window.Folio || {};
     remove() {
       const ids = topLevel();
       if (!ids.length) return;
-      store.remove(ids);
+      // layers inside an instance can't be deleted (they follow the main): hide them instead
+      const hide = ids.filter(inInstance);
+      if (hide.length) store.updateMany(hide, { visible: false });
+      const del = ids.filter((id) => !hide.includes(id));
+      if (del.length) store.remove(del);
+      if (hide.length) store.select([]);
       store.commit('Delete');
     },
     duplicate() {
       const ids = topLevel();
-      if (!ids.length) return;
+      if (!ids.length || lockedByInstance(ids)) return;
       const created = store.duplicate(ids);
       store.select(created);
       store.commit('Duplicate');
@@ -47,12 +70,15 @@ window.Folio = window.Folio || {};
     },
     cut() {
       const ids = topLevel();
-      if (!ids.length) return;
+      if (!ids.length || lockedByInstance(ids)) return;
       store.copy(ids);
       store.remove(ids);
       store.commit('Cut');
     },
     paste() {
+      const p = store.primary();
+      const inst = p && (inInstance(p.id) ? outerInstance(p.id) : p.instance ? p.id : null);
+      if (inst) store.select(store.get(inst).parent ? [store.get(inst).parent] : []); // paste beside the instance, never inside it
       const created = store.paste();
       if (!created.length) return;
       store.select(created);
@@ -64,7 +90,7 @@ window.Folio = window.Folio || {};
     /** Arrow keys: move freeform layers; reorder auto-layout children along their axis. */
     nudge(dx, dy) {
       const ids = topLevel().filter((id) => !store.get(id).locked);
-      if (!ids.length) return;
+      if (!ids.length || lockedByInstance(ids)) return;
       const free = ids.filter((id) => !isFlexChild(id));
       const flex = ids.filter((id) => isFlexChild(id));
       if (free.length) store.updateMany(free, (n) => ({ x: Math.round(n.x + dx), y: Math.round(n.y + dy) }));
@@ -80,7 +106,7 @@ window.Folio = window.Folio || {};
     /** ⇧A — wrap the selection in an auto-layout frame (direction guessed from positions). */
     wrapAutoLayout() {
       const ids = topLevel();
-      if (!ids.length) return;
+      if (!ids.length || lockedByInstance(ids)) return;
       const nodes = ids.map((id) => store.get(id));
       const parentId = nodes[0].parent;
       const sameParent = nodes.filter((n) => n.parent === parentId);
@@ -110,7 +136,7 @@ window.Folio = window.Folio || {};
     /** ⌘G — group into a freeform frame. */
     group() {
       const ids = topLevel();
-      if (!ids.length) return;
+      if (!ids.length || lockedByInstance(ids)) return;
       const frame = store.wrapInFrame(ids, { flex: false });
       if (!frame) return;
       store.select(frame.id);
@@ -120,7 +146,7 @@ window.Folio = window.Folio || {};
     /** ⇧⌘G — move the children out of a frame and delete the frame. */
     ungroup() {
       const p = store.primary();
-      if (!p || p.type !== 'frame' || !p.children.length) return;
+      if (!p || p.type !== 'frame' || !p.children.length || lockedByInstance([p.id]) || (p.instance && lockedByInstance(p.children))) return;
       const parentId = p.parent;
       const parentFree = !parentId || store.get(parentId).layout.mode !== 'flex';
       const selfFree = p.layout.mode !== 'flex';
@@ -155,7 +181,7 @@ window.Folio = window.Folio || {};
 
     reorder(delta) {
       const ids = topLevel();
-      if (!ids.length) return;
+      if (!ids.length || lockedByInstance(ids)) return;
       // move in an order that keeps relative stacking
       const sorted = ids.slice().sort((a, b) => store.siblingsOf(a).indexOf(a) - store.siblingsOf(b).indexOf(b));
       if (delta === 1 || delta === 'front') sorted.reverse();
@@ -203,6 +229,45 @@ window.Folio = window.Folio || {};
       const lock = ids.some((id) => !store.get(id).locked);
       store.updateMany(ids, { locked: lock });
       store.commit(lock ? 'Lock' : 'Unlock');
+    },
+
+    /** ⌥⌘K — turn the selection into a main component. */
+    createComponent() {
+      const K = Folio.components;
+      const ids = topLevel();
+      if (!K || !ids.length) return Folio.ui.toast('Select a frame (or a few layers) to turn into a component.');
+      if (ids.length === 1 && K.componentOf(ids[0])) return Folio.ui.toast('That is already a main component.');
+      if (lockedByInstance(ids) || ids.some((id) => store.get(id).instance)) return;
+      let comp = null;
+      try {
+        comp = K.create(ids, {});
+      } catch (e) {
+        return Folio.ui.toast(e.message || 'Could not create a component from this.', 'error');
+      }
+      if (!comp) return;
+      store.select([comp.mainId]);
+      store.commit('Create component');
+      Folio.ui.toast(`“${comp.name}” is now a component — find it in the Components tab.`, 'success');
+    },
+    /** ⌥⌘B — turn the selected instances back into plain layers. */
+    detachInstance() {
+      const K = Folio.components;
+      const ids = [...new Set(store.selection.map(outerInstance).filter(Boolean))];
+      if (!K || !ids.length) return;
+      ids.forEach((id) => K.detach(id));
+      store.select(ids.filter((id) => store.get(id)));
+      store.commit('Detach instance');
+    },
+    resetOverrides() {
+      const K = Folio.components;
+      const ids = [...new Set(store.selection.map(outerInstance).filter(Boolean))];
+      if (!K || !ids.length) return;
+      ids.forEach((id) => K.resetOverrides(id));
+      store.commit('Reset overrides');
+    },
+    goToMain() {
+      const p = store.primary();
+      if (p && KP()) KP().goToMain(p.id);
     },
 
     zoomFit: () => C() && C().zoomToFit && C().zoomToFit(),
@@ -254,6 +319,13 @@ window.Folio = window.Folio || {};
         ['mod+[', 'Send backward'],
         ['mod+alt+]', 'Bring to front'],
         ['mod+alt+[', 'Send to back'],
+      ],
+    },
+    {
+      group: 'Components',
+      items: [
+        ['mod+alt+k', 'Create component'],
+        ['mod+alt+b', 'Detach instance'],
       ],
     },
     {
@@ -360,6 +432,8 @@ window.Folio = window.Folio || {};
 
     // ----- with ⌘ / Ctrl -----
     if (mod) {
+      if (e.altKey && code === 'KeyK') return run(actions.createComponent);
+      if (e.altKey && code === 'KeyB') return run(actions.detachInstance);
       if (code === 'KeyZ' || lower === 'z') return run(e.shiftKey ? actions.redo : actions.undo);
       if (code === 'KeyY' || lower === 'y') return run(actions.redo);
       if (code === 'KeyD' || lower === 'd') return run(actions.duplicate);

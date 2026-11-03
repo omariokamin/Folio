@@ -26,6 +26,25 @@ window.Folio = window.Folio || {};
   let drag = null; // { id, ids, x, y, active, target, pointerId }
 
   // ---------- helpers ----------
+  const KP = () => Folio.componentsPanel;
+  const inInstance = (id) => !!(KP() && KP().inInstance(id));
+  const DIAMOND = '<path d="M12 3.5l8.5 8.5-8.5 8.5L3.5 12z"/>';
+  const DIAMONDS = '<path d="M12 2.5l4 4-4 4-4-4zM12 13.5l4 4-4 4-4-4zM6.5 8l4 4-4 4-4-4zM17.5 8l4 4-4 4-4-4z"/>';
+  function compIcon(body, filled) {
+    const t = document.createElement('template');
+    t.innerHTML = `<svg class="f-icon${filled ? ' is-filled' : ''}" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
+    return t.content.firstChild;
+  }
+  /** Component role of a layer: 'main' | 'set' | 'instance' | 'inner' | null. */
+  function compRole(n) {
+    const K = Folio.components;
+    if (!K) return null;
+    if (n.component && K.componentOf(n.id)) return 'main';
+    if (KP() && KP().isSetFrame(n.id)) return 'set';
+    if (inInstance(n.id)) return 'inner';
+    if (n.instance) return 'instance';
+    return null;
+  }
   function iconFor(n) {
     if (n.type === 'text') return 'text';
     if (n.type === 'image') return 'image';
@@ -85,6 +104,10 @@ window.Folio = window.Folio || {};
     if (depth === 0) cls.push('is-root');
     if (hidden || parentHidden) cls.push('is-hidden');
     if (n.locked) cls.push('is-locked');
+    const role = compRole(n);
+    if (role === 'main' || role === 'set') cls.push('is-comp');
+    if (role === 'instance') cls.push('is-instance');
+    if (role === 'inner') cls.push('is-in-instance');
 
     const eye = h(
       'button',
@@ -112,7 +135,11 @@ window.Folio = window.Folio || {};
         { class: 'ly-row__caret' + (hasKids ? '' : ' is-empty'), dataset: { act: 'caret' } },
         hasKids ? icon(open ? 'chevron-down' : 'chevron-right', 12) : null
       ),
-      h('span', { class: 'ly-row__icon' }, icon(iconFor(n), 14)),
+      h(
+        'span',
+        { class: 'ly-row__icon', title: { main: 'Main component', set: 'Component set', instance: 'Instance' }[role] || null },
+        role === 'main' ? compIcon(DIAMOND, true) : role === 'set' ? compIcon(DIAMONDS) : role === 'instance' ? compIcon(DIAMOND) : icon(iconFor(n), 14)
+      ),
       h('span', { class: 'ly-row__name' }, n.name || n.type),
       h('span', { class: 'ly-row__actions' }, lock, eye)
     );
@@ -200,6 +227,7 @@ window.Folio = window.Folio || {};
     const row = rowOf(id);
     const n = store.get(id);
     if (!row || !n) return;
+    if (inInstance(id)) return Folio.ui.toast('Edit the main component to change this');
     const nameEl = row.querySelector('.ly-row__name');
     renaming = id;
     const input = h('input', { class: 'ly-rename', value: n.name, spellcheck: false });
@@ -234,8 +262,18 @@ window.Folio = window.Folio || {};
     const A = Folio.actions || {};
     const k = Folio.keys ? Folio.keys.fmt : (s) => s;
     const run = (fn) => () => fn && fn();
+    const role = compRole(n);
+    const inst = role === 'instance' || role === 'inner';
+    const comp = [
+      role === null && n.type === 'frame' && Folio.components ? { label: 'Create component', shortcut: k('mod+alt+k'), action: run(A.createComponent) } : null,
+      inst ? { label: 'Go to main component', action: () => KP() && KP().goToMain(id) } : null,
+      role === 'instance' ? { label: 'Reset overrides', action: run(A.resetOverrides) } : null,
+      inst ? { label: 'Detach instance', shortcut: k('mod+alt+b'), action: run(A.detachInstance) } : null,
+    ].filter(Boolean);
     Folio.menu.open({ x, y }, [
-      { label: 'Rename', action: () => startRename(id) },
+      ...comp,
+      comp.length ? { sep: true } : null,
+      { label: 'Rename', action: () => startRename(id), disabled: role === 'inner' },
       { label: 'Duplicate', shortcut: k('mod+d'), action: run(A.duplicate) },
       { label: 'Delete', shortcut: k('del'), action: run(A.remove) },
       { sep: true },
@@ -319,6 +357,9 @@ window.Folio = window.Folio || {};
     if (n.type === 'frame') zone = rel < 0.28 ? 'above' : rel > 0.72 ? 'below' : 'inside';
     else zone = rel < 0.5 ? 'above' : 'below';
     if (zone === 'below' && n.type === 'frame' && expanded.has(id) && n.children.length) zone = 'inside-top';
+    // instance internals follow their main: nothing can be dropped into or between them
+    const into = zone === 'inside' || zone === 'inside-top' ? id : n.parent;
+    if (into && KP() && KP().dropBlocked(into, drag.ids)) return null;
     return { id, zone, row, depth: Number(row.dataset.depth) };
   }
 
@@ -415,6 +456,7 @@ window.Folio = window.Folio || {};
     const wasSelected = store.selection.includes(id);
     if (!wasSelected) store.select(id);
     const ids = topLevel(store.selection.includes(id) ? store.selection : [id]);
+    if (ids.some(inInstance)) return; // layers inside an instance can't be moved (they follow the main)
     drag = { id, ids, x: e.clientX, y: e.clientY, active: false, target: null, wasSelected };
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
@@ -520,6 +562,7 @@ window.Folio = window.Folio || {};
     tree.addEventListener('mouseleave', () => store.setHover(null));
 
     store.on('change', schedule);
+    store.on('components', schedule);
     store.on('doc', () => {
       seen.clear();
       expanded.clear();

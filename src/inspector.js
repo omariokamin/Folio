@@ -298,6 +298,9 @@ window.Folio = window.Folio || {};
     'gap-v': '<rect x="5" y="3" width="14" height="6" rx="1"/><rect x="5" y="15" width="14" height="6" rx="1"/><path d="M9 12h6"/>',
     link: '<path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/>',
     unlink: '<path d="M10 14a4 4 0 005.7 0l1.2-1.2M19 9.5a4 4 0 00-5.7-4.2M14 10a4 4 0 00-5.7 0L7 11.3M5 14.5a4 4 0 005.7 4.2M4 4l16 16"/>',
+    diamond: '<path d="M12 3.5l8.5 8.5-8.5 8.5L3.5 12z"/>',
+    'diamond-fill': '<path d="M12 3.5l8.5 8.5-8.5 8.5L3.5 12z" fill="currentColor"/>',
+    reset: '<path d="M4 12a8 8 0 102.3-5.7M4 4v5h5"/>',
     palette: '<path d="M12 3a9 9 0 100 18c1.1 0 1.6-.8 1.6-1.6 0-.5-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.9.7-1.6 1.6-1.6H16a5 5 0 005-5c0-4.1-4-7.6-9-7.6z"/><circle cx="7.5" cy="11" r="1.2"/><circle cx="10.5" cy="7" r="1.2"/><circle cx="15" cy="7.5" r="1.2"/>',
   };
   function icon(name) {
@@ -447,7 +450,7 @@ window.Folio = window.Folio || {};
 
     const attachScrub = (lab) => {
       lab.addEventListener('pointerdown', (e) => {
-        if (e.button !== 0) return;
+        if (e.button !== 0 || input.disabled) return;
         e.preventDefault();
         const cur = evalNum(input.value);
         const start = cur != null ? cur : Number(o.get()) || 0;
@@ -985,11 +988,19 @@ window.Folio = window.Folio || {};
   }
 
   function buildHeader(p, count) {
-    const label = !p.parent ? 'Artboard' : p.type === 'frame' ? (p.layout.mode === 'flex' ? 'Auto layout' : 'Frame') : p.type === 'text' ? 'Text' : 'Image';
+    const role = compRole(p);
+    const label =
+      { main: 'Main component', instance: 'Instance' }[role] ||
+      (!p.parent ? 'Artboard' : p.type === 'frame' ? (p.layout.mode === 'flex' ? 'Auto layout' : 'Frame') : p.type === 'text' ? 'Text' : 'Image');
+    const canCreate = !role && p.type === 'frame' && !inInst(p.id) && Folio.components && !(KP() && KP().isSetFrame(p.id));
     return h(
       'div',
       { class: 'f-section ins-header' },
-      h('div', { class: 'ins-header__icon', title: label }, icon(typeIcon(p))),
+      h(
+        'div',
+        { class: 'ins-header__icon' + (role ? ' is-comp' : ''), title: label },
+        icon(role === 'main' ? 'diamond-fill' : role === 'instance' ? 'diamond' : typeIcon(p))
+      ),
       textField({
         key: 'name',
         cls: 'ins-header__name',
@@ -1002,8 +1013,378 @@ window.Folio = window.Folio || {};
         commitLabel: 'Rename layer',
         title: 'Layer name',
       }),
-      count > 1 ? h('span', { class: 'ins-header__count', title: `${count} layers selected — edits apply to all` }, `+${count - 1}`) : null
+      count > 1 ? h('span', { class: 'ins-header__count', title: `${count} layers selected — edits apply to all` }, `+${count - 1}`) : null,
+      canCreate ? iconBtn('diamond', `Create component (${keyFmt('mod+alt+k')})`, () => Folio.actions && Folio.actions.createComponent()) : null
     );
+  }
+
+  // ---------------- components ----------------
+  const K = () => Folio.components;
+  const KP = () => Folio.componentsPanel;
+  const inInst = (id) => !!(KP() && KP().inInstance(id));
+  const keyFmt = (c) => (Folio.keys ? Folio.keys.fmt(c) : c);
+  /** 'main' | 'instance' (a direct instance root) | null */
+  function compRole(n) {
+    const k = K();
+    if (!k || !n) return null;
+    if (n.component && k.componentOf(n.id)) return 'main';
+    if (n.instance && !inInst(n.id)) return 'instance';
+    return null;
+  }
+  const FIELD_NAMES = {
+    'text.content': 'text',
+    'text.color': 'text colour',
+    'style.fills': 'fill',
+    'style.border.color': 'border colour',
+    'image.src': 'image',
+    'image.fit': 'image fit',
+    visible: 'visibility',
+  };
+
+  /** "Main component" / "Instance" section for the primary node (null when it is neither). */
+  function buildComponent(p) {
+    const k = K();
+    if (!k) return null;
+    const role = compRole(p);
+    if (role === 'main') return buildMain(p, k.componentOf(p.id));
+    if (role === 'instance') return buildInstance(p);
+    if (!inInst(p.id)) return null;
+    // a layer inside an instance
+    const outer = outerInstance(p.id);
+    const comp = outer && k.get(store.get(outer).instance.componentId);
+    return section(
+      'component',
+      'Instance',
+      {},
+      h('div', { class: 'f-row ins-kc__name' }, icon('diamond'), h('span', {}, `Part of “${(outer && store.get(outer).name) || (comp && comp.name) || 'an instance'}”`)),
+      h(
+        'div',
+        { class: 'f-row ins-kc__btns' },
+        h('button', { type: 'button', class: 'f-btn', onClick: () => outer && store.select([outer]) }, 'Select instance'),
+        h('button', { type: 'button', class: 'f-btn', onClick: () => KP().goToMain(p.id) }, 'Go to main')
+      ),
+      h('p', { class: 'f-hint' }, 'You can change text, colours, fills, images and visibility here. Everything else comes from the main component.')
+    );
+  }
+
+  function outerInstance(id) {
+    const k = K();
+    let r = k.instanceRootOf(id);
+    while (r && !k.isDirectInstance(r)) {
+      const par = store.get(r).parent;
+      r = par ? k.instanceRootOf(par) : null;
+    }
+    return r || null;
+  }
+
+  function buildInstance(p) {
+    const k = K();
+    const comp = k.get(p.instance.componentId);
+    const set = comp && comp.setId ? k.getSet(comp.setId) : null;
+    const goMain = h('button', { type: 'button', class: 'f-btn', title: 'Select the main component this copy follows', onClick: () => KP().goToMain(p.id) }, icon('arrow-right'), 'Go to main');
+    const body = [
+      h('div', { class: 'f-row ins-kc__name' }, icon('diamond'), h('span', { title: comp ? comp.name : '' }, comp ? (set ? set.name : comp.name) : 'Missing component')),
+    ];
+    if (set) {
+      Object.keys(set.props || {}).forEach((prop) => {
+        body.push(
+          h(
+            'div',
+            { class: 'ins-kc__prop' },
+            h('span', { class: 'f-label', title: prop }, prop),
+            selectField({
+              key: 'variant.' + prop,
+              title: prop,
+              options: set.props[prop].map((v) => [v, v]),
+              get: () => {
+                const c = P() && P().instance && k.get(P().instance.componentId);
+                return c && c.variant ? c.variant[prop] : '';
+              },
+              set: (v) => {
+                let id = null;
+                try {
+                  id = k.setVariant(P().id, { [prop]: v });
+                } catch (e) {
+                  Folio.ui.toast(e.message || 'There is no variant with that combination.', 'error');
+                }
+                if (typeof id === 'string' && store.get(id) && id !== P().id) store.select([id]);
+              },
+              commitLabel: 'Switch variant',
+            })
+          )
+        );
+      });
+    }
+    const ovr = k.overridesOf(p.id) || {};
+    const paths = Object.keys(ovr);
+    body.push(h('div', { class: 'f-label ins-kc__sub' }, paths.length ? 'Overrides' : 'No overrides — this copy matches the main.'));
+    paths.forEach((path) => {
+      const fields = Object.keys(ovr[path]).map((f) => FIELD_NAMES[f] || f);
+      body.push(
+        h(
+          'div',
+          { class: 'ins-kc__ovr' },
+          h('span', { title: `${path || p.name}: ${fields.join(', ')}` }, h('b', {}, path || 'Instance'), ' · ' + fields.join(', ')),
+          iconBtn('reset', `Reset ${path || 'instance'} to the main`, () => {
+            k.resetOverrides(P().id, path);
+            commit('Reset override');
+          })
+        )
+      );
+    });
+    const resetAll = h('button', { type: 'button', class: 'f-btn', disabled: !paths.length, onClick: () => Folio.actions.resetOverrides() }, 'Reset all');
+    const detach = h(
+      'button',
+      { type: 'button', class: 'f-btn', title: `Turn into plain layers (${keyFmt('mod+alt+b')})`, onClick: () => Folio.actions.detachInstance() },
+      'Detach'
+    );
+    body.push(h('div', { class: 'f-row ins-kc__btns' }, resetAll, detach));
+    return section('component', 'Instance', { actions: [goMain] }, ...body);
+  }
+
+  /** Rename a prop or value across the set and every variant in it, then apply. mapVariant(variant) -> variant. */
+  function editSet(set, props, mapVariant, label) {
+    const k = K();
+    k.setSetProps(set.id, props);
+    if (mapVariant) k.list().filter((c) => c.setId === set.id).forEach((c) => k.setVariantOf(c.id, mapVariant(Object.assign({}, c.variant))));
+    commit(label);
+  }
+
+  /** The first combination of existing values no variant uses yet, else a new value of the first prop. */
+  function nextVariant(comp, set) {
+    const k = K();
+    const props = set.props || {};
+    const keys = Object.keys(props);
+    const used = new Set(k.list().filter((c) => c.setId === set.id).map((c) => keys.map((key) => (c.variant || {})[key]).join('\u0000')));
+    let combos = [[]];
+    keys.forEach((key) => (combos = combos.flatMap((cb) => props[key].map((v) => cb.concat(v)))));
+    const free = keys.length && combos.find((cb) => !used.has(cb.join('\u0000')));
+    if (free) return Object.fromEntries(keys.map((key, i) => [key, free[i]]));
+    const first = keys[0] || 'Property 1';
+    const vals = props[first] || [];
+    let n = vals.length + 1;
+    while (vals.includes('Variant ' + n)) n++;
+    return Object.assign({}, comp.variant, { [first]: 'Variant ' + n });
+  }
+
+  function buildMain(p, comp) {
+    const k = K();
+    const set = comp.setId ? k.getSet(comp.setId) : null;
+    const uses = Object.values(store.doc.nodes).filter((n) => n.instance && n.instance.componentId === comp.id).length;
+    const body = [
+      row(
+        textField({
+          key: 'compname',
+          placeholder: 'Component name',
+          title: set ? 'Component set name' : 'Component name',
+          get: () => (set ? (k.getSet(set.id) || set).name : (k.get(comp.id) || comp).name),
+          set: (v, final) => {
+            v = v.trim();
+            if (!final || !v) return;
+            if (set) {
+              k.getSet(set.id).name = v;
+              store.update(set.frameId, { name: v });
+              k.list().forEach((c) => c.setId === set.id && (c.name = v));
+            } else {
+              k.get(comp.id).name = v;
+              store.update(comp.mainId, { name: v });
+            }
+            store.emit('components');
+          },
+          commitLabel: 'Rename component',
+        })
+      ),
+    ];
+    const desc = h('textarea', { class: 'f-input ins-kc__desc', rows: 2, placeholder: 'Description (optional)', 'data-k': 'compdesc', spellcheck: 'false' });
+    desc.addEventListener('change', () => {
+      const c = k.get(comp.id);
+      if (!c) return;
+      c.description = desc.value.trim(); // shortcut: the registry has no setter for this; it is plain doc data
+      store.emit('components');
+      commit('Component description');
+    });
+    bind(desc, () => {
+      const c = k.get(comp.id);
+      desc.value = (c && c.description) || '';
+    });
+    body.push(row(desc));
+
+    if (set) {
+      const props = set.props || {};
+      const usedVals = (key) => new Set(k.list().filter((c) => c.setId === set.id).map((c) => (c.variant || {})[key]));
+      body.push(h('div', { class: 'f-label ins-kc__sub' }, 'Variant properties'));
+      Object.keys(props).forEach((key) => {
+        const vals = props[key];
+        const used = usedVals(key);
+        const nameInput = textField({
+          key: 'prop.' + key,
+          cls: 'ins-kc__propname',
+          title: 'Property name',
+          get: () => key,
+          set: (v, final) => {
+            v = v.trim();
+            if (!final || !v || v === key || props[v]) return;
+            const next = {};
+            Object.keys(props).forEach((kk) => (next[kk === key ? v : kk] = props[kk]));
+            editSet(set, next, (vr) => {
+              vr[v] = vr[key];
+              delete vr[key];
+              return vr;
+            }, 'Rename property');
+          },
+          noCommit: true,
+        });
+        const removeProp = iconBtn('x', `Remove property “${key}”`, () => {
+          const next = Object.assign({}, props);
+          delete next[key];
+          editSet(set, next, (vr) => (delete vr[key], vr), 'Remove property');
+        });
+        const chips = vals.map((val) => {
+          const label = h('span', { title: 'Double-click to rename' }, val);
+          label.addEventListener('dblclick', () => {
+            const inp = h('input', { class: 'f-input', value: val, 'aria-label': 'Value name', spellcheck: 'false' });
+            label.replaceWith(inp);
+            inp.focus();
+            inp.select();
+            let done = false;
+            const finish = (ok) => {
+              if (done) return;
+              done = true;
+              const v = inp.value.trim();
+              if (ok && v && v !== val && !vals.includes(v)) {
+                editSet(set, Object.assign({}, props, { [key]: vals.map((x) => (x === val ? v : x)) }), (vr) => (vr[key] === val && (vr[key] = v), vr), 'Rename value');
+              } else rebuild();
+            };
+            inp.addEventListener('keydown', (e) => {
+              e.stopPropagation();
+              if (e.key === 'Enter') finish(true);
+              if (e.key === 'Escape') finish(false);
+            });
+            inp.addEventListener('blur', () => finish(true));
+          });
+          const x = h('button', {
+            type: 'button',
+            title: used.has(val) ? 'A variant uses this value — change or delete that variant first' : `Remove “${val}”`,
+            'aria-label': `Remove value ${val}`,
+            disabled: used.has(val),
+            onClick: () => editSet(set, Object.assign({}, props, { [key]: vals.filter((x2) => x2 !== val) }), null, 'Remove value'),
+          }, '×');
+          return h('span', { class: 'ins-kc__chip' + (comp.variant && comp.variant[key] === val ? ' is-current' : '') }, label, x);
+        });
+        const addVal = h(
+          'button',
+          {
+            type: 'button',
+            class: 'f-btn f-btn--ghost ins-kc__add',
+            title: `Add a value to “${key}”`,
+            onClick: () => {
+              let n = vals.length + 1;
+              while (vals.includes('Value ' + n)) n++;
+              editSet(set, Object.assign({}, props, { [key]: vals.concat('Value ' + n) }), null, 'Add value');
+            },
+          },
+          '+ Value'
+        );
+        body.push(
+          h('div', { class: 'ins-kc__propblock' }, row(nameInput, removeProp), h('div', { class: 'ins-kc__vals' }, ...chips, addVal)),
+          h(
+            'div',
+            { class: 'ins-kc__prop' },
+            h('span', { class: 'f-label' }, 'This variant'),
+            selectField({
+              key: 'myvar.' + key,
+              title: `This variant's ${key}`,
+              options: vals.map((v) => [v, v]),
+              get: () => ((k.get(comp.id) || comp).variant || {})[key] || '',
+              set: (v) => k.setVariantOf(comp.id, Object.assign({}, k.get(comp.id).variant, { [key]: v })),
+              commitLabel: 'Change variant',
+            })
+          )
+        );
+      });
+      body.push(
+        h(
+          'button',
+          {
+            type: 'button',
+            class: 'f-btn f-btn--ghost ins-kc__add',
+            onClick: () => {
+              let n = Object.keys(props).length + 1;
+              while (props['Property ' + n]) n++;
+              const key = 'Property ' + n;
+              editSet(set, Object.assign({}, props, { [key]: ['Default'] }), (vr) => ((vr[key] = 'Default'), vr), 'Add property');
+            },
+          },
+          '+ Property'
+        )
+      );
+    }
+    const addVariant = h(
+      'button',
+      {
+        type: 'button',
+        class: 'f-btn',
+        title: 'Add another version of this component (e.g. a hover or dark state)',
+        onClick: () => {
+          let made = null;
+          try {
+            made = k.addVariant(comp.id, set ? nextVariant(comp, set) : {});
+          } catch (e) {
+            return Folio.ui.toast(e.message || 'Could not add a variant.', 'error');
+          }
+          const c = made && (typeof made === 'string' ? k.get(made) : made);
+          if (c && store.get(c.mainId)) store.select([c.mainId]);
+          commit('Add variant');
+        },
+      },
+      icon('plus'),
+      'Add variant'
+    );
+    body.push(h('div', { class: 'f-row ins-kc__btns' }, addVariant));
+    body.push(h('p', { class: 'f-hint' }, uses ? `Used ${uses} time${uses === 1 ? '' : 's'}. Changes here update every copy.` : 'Drop copies from the Components tab — they update when you change this.'));
+    return section('component', set ? 'Main component · variant' : 'Main component', {}, ...body);
+  }
+
+  /** Inside an instance only the overridable fields stay editable; everything else is read-only. */
+  const RO_HINT = 'Edit the main component to change this';
+  const KEEP_ROOT = { position: ['x', 'y', 'align'], size: ['*'], fill: ['*'], image: ['*'], border: ['bcolor'], css: ['*'], component: ['*'] };
+  const KEEP_INNER = { fill: ['*'], image: ['*'], border: ['bcolor'], text: ['content', 'tcolor'], css: ['*'], component: ['*'] };
+  function ownerKey(el) {
+    if (el.closest('.ins-align')) return 'align';
+    const c = el.closest('.ins-color');
+    const keyed = c ? c.querySelector('[data-k]') : el.closest('.f-num') ? el.closest('.f-num').querySelector('[data-k]') : null;
+    return (el.dataset && el.dataset.k) || (keyed && keyed.dataset.k) || '';
+  }
+  function lockForInstance(container, ids) {
+    const inner = ids.some(inInst);
+    const rootInst = ids.some((id) => store.get(id).instance && !inInst(id));
+    if (!inner && !rootInst) return;
+    const keep = inner ? KEEP_INNER : KEEP_ROOT;
+    if (inner) {
+      const name = container.querySelector('.ins-header [data-k="name"]');
+      if (name) {
+        name.disabled = true;
+        name.title = RO_HINT;
+      }
+    }
+    container.querySelectorAll('.ins-sec[data-sec]').forEach((sec) => {
+      const keys = keep[sec.dataset.sec] || [];
+      if (keys.includes('*')) return;
+      let locked = 0;
+      sec.querySelectorAll('.ins-sec__body input, .ins-sec__body select, .ins-sec__body textarea, .ins-sec__body button, .ins-sec__actions button').forEach((el) => {
+        const key = ownerKey(el);
+        if (keys.some((x) => key === x || key.startsWith(x + '.'))) return;
+        el.disabled = true;
+        locked++;
+        const c = el.closest('.ins-color, .f-seg');
+        if (c) c.classList.add('is-disabled');
+      });
+      if (!locked) return;
+      sec.classList.add('is-readonly');
+      const body = sec.querySelector('.ins-sec__body');
+      if (body) body.prepend(h('p', { class: 'ins-ro-hint' }, icon('diamond'), RO_HINT));
+      if (sec.classList.contains('is-empty')) sec.classList.remove('is-empty');
+    });
   }
 
   // ---------------- position ----------------
@@ -2452,7 +2833,7 @@ window.Folio = window.Folio || {};
           get: () => B().color,
           set: (c) => {
             // picking a colour on a 0-width border implies you want to see it
-            patchSel((n) => ({ style: { border: { color: c, width: (n.style.border && n.style.border.width) || 1 } } }));
+            patchSel((n) => ({ style: { border: n.instance || inInst(n.id) ? { color: c } : { color: c, width: (n.style.border && n.style.border.width) || 1 } } }));
           },
           commitLabel: 'Border colour',
         })
@@ -2672,9 +3053,27 @@ window.Folio = window.Folio || {};
       p.text ? p.text.font + ':' + p.text.weight : '',
       p.type === 'image' && p.image ? String(p.image.src || '').startsWith('brand-logo:') : '',
       uiKey,
+      componentKey(p),
       brandKey(),
     ];
     return parts.join('|');
+  }
+
+  /** Rebuild when component facts change: role, variant props, which overrides exist. */
+  function componentKey(p) {
+    const k = K();
+    if (!k) return '';
+    const role = compRole(p);
+    const comp = role === 'main' ? k.componentOf(p.id) : role === 'instance' ? k.get(p.instance.componentId) : null;
+    const set = comp && comp.setId ? k.getSet(comp.setId) : null;
+    const ovr = role === 'instance' ? k.overridesOf(p.id) || {} : {};
+    return [
+      role || (inInst(p.id) ? 'inner' : ''),
+      comp ? comp.id + JSON.stringify(comp.variant || {}) : '',
+      set ? JSON.stringify(set.props) : '',
+      Object.keys(ovr).map((path) => path + ':' + Object.keys(ovr[path]).join(',')).join(';'),
+      selIds().some((id) => store.get(id).instance || inInst(id)),
+    ].join('/');
   }
 
   function rebuild() {
@@ -2712,6 +3111,8 @@ window.Folio = window.Folio || {};
       const p = store.get(ids[ids.length - 1]);
       root.dataset.mode = p.type;
       frag.appendChild(buildHeader(p, ids.length));
+      const kc = buildComponent(p);
+      if (kc) frag.appendChild(kc);
       frag.appendChild(buildPosition(p));
       frag.appendChild(buildSize(p));
       if (p.type === 'frame') frag.appendChild(buildAutoLayout(p));
@@ -2723,6 +3124,7 @@ window.Folio = window.Folio || {};
       frag.appendChild(buildShadows(p));
       frag.appendChild(buildEffects(p));
       frag.appendChild(buildCss(p));
+      lockForInstance(frag, ids);
     }
     root.replaceChildren(frag);
     lastKey = structureKey();
@@ -2784,7 +3186,7 @@ window.Folio = window.Folio || {};
     root = document.getElementById('inspector');
     if (!root) return;
     root.classList.add('ins');
-    ['change', 'selection', 'doc', 'history', 'brand'].forEach((e) => store.on(e, schedule));
+    ['change', 'selection', 'doc', 'history', 'brand', 'components'].forEach((e) => store.on(e, schedule));
     // a rebuild deferred while typing happens as soon as focus leaves the field
     root.addEventListener('focusout', () => setTimeout(schedule, 0));
     rebuild();

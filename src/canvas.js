@@ -8,6 +8,7 @@
  *   Folio.canvas.startTextEdit(id) / endTextEdit()
  *   Folio.canvas.placeImage(src, name) -> Promise<node>
  *   Folio.canvas.createArtboard(preset) -> node
+ *   Folio.canvas.frameAt(clientX, clientY) / flexDrop(frameId, worldPt) / contentOrigin(frameId)   (drop helpers)
  *
  * Every gesture mutates the store live (or shows a transient preview) and calls
  * store.commit() exactly once when it ends.
@@ -75,6 +76,8 @@ window.Folio = window.Folio || {};
     return false;
   }
   const isFlex = (n) => !!(n && n.type === 'frame' && n.layout && n.layout.mode === 'flex');
+  const KP = () => Folio.componentsPanel;
+  const inInstance = (id) => !!(KP() && KP().inInstance(id));
   const borderW = (n) => (n && n.style && n.style.border && Number(n.style.border.width)) || 0;
 
   /** Document (pre-)order index of every node, for stable ordering of multi-node operations. */
@@ -97,7 +100,7 @@ window.Folio = window.Folio || {};
     const set = new Set(ids);
     const order = docOrder();
     return ids
-      .filter((id) => store.get(id) && !lockedDeep(id) && !hiddenDeep(id))
+      .filter((id) => store.get(id) && !lockedDeep(id) && !hiddenDeep(id) && !inInstance(id))
       .filter((id) => !store.ancestors(id).some((a) => set.has(a)))
       .sort((a, b) => order.get(a) - order.get(b));
   }
@@ -162,11 +165,12 @@ window.Folio = window.Folio || {};
     if ((n.children || []).some((c) => !(exclude && exclude.has(c)))) return true;
     return /^(frame|group|auto layout|container|section|artboard)\b/i.test(n.name || '');
   }
-  /** The deepest container frame under a point (non-containers resolve to their parent). */
-  function frameAt(cx, cy, exclude) {
+  /** The deepest container frame under a point (non-containers resolve to their parent). Instance
+   *  internals and component sets are skipped (see componentsPanel.dropBlocked); `ids` = layers being moved. */
+  function frameAt(cx, cy, exclude, ids) {
     const hit = hitNodes(cx, cy, exclude)[0];
     let n = hit ? store.get(hit) : null;
-    while (n && !isContainer(n, exclude)) n = n.parent ? store.get(n.parent) : null;
+    while (n && (!isContainer(n, exclude) || (KP() && KP().dropBlocked(n.id, ids || [])))) n = n.parent ? store.get(n.parent) : null;
     return n ? n.id : null;
   }
   /** Which node a click on `path` selects. */
@@ -538,7 +542,7 @@ window.Folio = window.Folio || {};
     lockCursor(g.alt ? 'copy' : 'default');
 
     // drop target
-    let target = frameAt(e.clientX, e.clientY, g.excluded);
+    let target = frameAt(e.clientX, e.clientY, g.excluded, g.ids);
     if (target && g.ids.every((id) => store.isRoot(id))) {
       // artboards only nest when dropped entirely inside another frame
       const tb = layoutBox(target);
@@ -693,7 +697,7 @@ window.Folio = window.Folio || {};
     if (store.selection.length !== 1) return;
     const id = store.selection[0];
     const n = store.get(id);
-    if (!n || lockedDeep(id)) return;
+    if (!n || lockedDeep(id) || inInstance(id)) return;
     R().sync();
     const box = layoutBox(id);
     if (!box) return;
@@ -1067,7 +1071,7 @@ window.Folio = window.Folio || {};
     if (store.editingTextId === ed.id) store.editingTextId = null;
     const n = store.get(ed.id);
     if (n) {
-      if (!text.trim()) store.remove([ed.id]);
+      if (!text.trim()) inInstance(ed.id) ? store.update(ed.id, { visible: false }) : store.remove([ed.id]);
       else if (text !== n.text.content) store.update(ed.id, { text: { content: text } });
       else store.emit('change'); // let the renderer normalise the DOM the editor left behind
     }
@@ -1390,6 +1394,9 @@ window.Folio = window.Folio || {};
     placeImage,
     createArtboard,
     hitPath,
+    frameAt,
+    flexDrop,
+    contentOrigin,
     disarmAutoFit,
   };
 })();

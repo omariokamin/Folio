@@ -71,7 +71,7 @@ window.Folio = window.Folio || {};
     root = document.getElementById('canvas-overlay');
     vp = document.getElementById('canvas-viewport');
     if (!root) return;
-    ['selection', 'hover', 'tool', 'history', 'doc'].forEach((evt) => store.on(evt, schedule));
+    ['selection', 'hover', 'tool', 'history', 'doc', 'components'].forEach((evt) => store.on(evt, schedule));
     window.addEventListener('resize', schedule);
     if (window.ResizeObserver && vp) new ResizeObserver(schedule).observe(vp);
     if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', schedule);
@@ -154,6 +154,17 @@ window.Folio = window.Folio || {};
     return Array.isArray(r) ? r.map(one).join(' ') : one(r);
   }
 
+  /** 'main' | 'set' | 'instance' (incl. layers inside one) | null — drawn in the component purple. */
+  function compRole(id) {
+    const K = Folio.components;
+    const n = store.get(id);
+    if (!K || !n) return null;
+    if (n.component && K.componentOf(id)) return 'main';
+    if (Folio.componentsPanel && Folio.componentsPanel.isSetFrame(id)) return 'set';
+    if (K.instanceRootOf(id)) return 'instance';
+    return null;
+  }
+
   const fmt = (v) => {
     const r = Math.round(v * 100) / 100;
     return String(r);
@@ -192,14 +203,23 @@ window.Folio = window.Folio || {};
       if (b) {
         const el = take('hover');
         place(el, b);
+        if (compRole(hov)) el.classList.add('is-comp');
         el.style.borderRadius = radiusCss(store.get(hov), z, b);
       }
     }
 
-    // artboard labels
-    store.doc.roots.forEach((id) => {
+    // artboard labels, plus a purple label above every main component and component set
+    const K = Folio.components;
+    const labelled = store.doc.roots.slice();
+    if (K) {
+      K.list().forEach((c) => store.get(c.mainId) && !store.isRoot(c.mainId) && labelled.push(c.mainId));
+      K.sets().forEach((st) => store.get(st.frameId) && !store.isRoot(st.frameId) && labelled.push(st.frameId));
+    }
+    labelled.forEach((id) => {
       const n = store.get(id);
       if (!n || n.visible === false) return;
+      const inner = !store.isRoot(id);
+      if (inner && store.ancestors(id).some((a) => store.get(a).visible === false)) return;
       const b = sbox(id);
       if (!b) return;
       const el = take('label');
@@ -207,11 +227,14 @@ window.Folio = window.Folio || {};
       if (el.textContent !== n.name) el.textContent = n.name || 'Untitled';
       el.dataset.root = id;
       el.style.maxWidth = Math.max(0, a.width) + 'px';
-      el.style.transform = `translate(${snap(a.x)}px, ${snap(a.y - 20)}px)`;
+      el.style.transform = `translate(${snap(a.x)}px, ${snap(a.y - (inner ? 17 : 20))}px)`;
+      const role = compRole(id);
+      if (role === 'main' || role === 'set') el.classList.add('is-comp', 'is-' + role);
+      if (inner) el.classList.add('is-inner');
       if (selSet.has(id)) el.classList.add('is-selected');
       if (hov === id && !guides.hideHover) el.classList.add('is-hover');
       if (n.locked) el.classList.add('is-locked');
-      if (a.width < 12) el.style.display = 'none';
+      if (a.width < (inner ? 40 : 12) || (inner && a.height < 12)) el.style.display = 'none';
     });
 
     // selection outlines
@@ -221,6 +244,7 @@ window.Folio = window.Folio || {};
       if (!b) return;
       const el = take('sel');
       if (id === editing) el.classList.add('is-editing');
+      if (compRole(id)) el.classList.add('is-comp');
       place(el, b);
       const a = b.aabb;
       union = union
@@ -234,7 +258,9 @@ window.Folio = window.Folio || {};
     });
 
     // resize handles (single selection only)
-    if (sel.length === 1 && !editing && !guides.hideHandles && !lockedDeep(sel[0])) {
+    const innerSel = sel.length === 1 && Folio.componentsPanel && Folio.componentsPanel.inInstance(sel[0]);
+    if (sel.length === 1 && !editing && !guides.hideHandles && !lockedDeep(sel[0]) && !innerSel) {
+      const purple = !!compRole(sel[0]);
       const b = sbox(sel[0]);
       if (b) {
         const rad = (b.rotation * Math.PI) / 180;
@@ -249,6 +275,7 @@ window.Folio = window.Folio || {};
           const py = cy + lx * sin + ly * cos;
           const el = take('handle');
           el.dataset.handle = name;
+          if (purple) el.classList.add('is-comp');
           el.style.transform =
             `translate(${snap(px) - 4}px, ${snap(py) - 4}px)` + (b.rotation ? ` rotate(${b.rotation}deg)` : '');
           // cursor follows the handle direction, rotated with the node
@@ -272,6 +299,7 @@ window.Folio = window.Folio || {};
         h = (union.y2 - union.y1) / z;
       }
       const el = take('badge');
+      if (sel.length === 1 && compRole(sel[0])) el.classList.add('is-comp');
       const txt = `${fmt(w)} × ${fmt(h)}`;
       if (el.textContent !== txt) el.textContent = txt;
       el.style.transform = `translate(${snap((union.x1 + union.x2) / 2)}px, ${snap(union.y2 + 8)}px) translateX(-50%)`;
