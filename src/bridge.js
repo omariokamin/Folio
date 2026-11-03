@@ -20,7 +20,7 @@ window.Folio = window.Folio || {};
   const TOKEN_KEY = 'folio:bridge:token';
   const COMMIT_QUIET_MS = 1200;
   const WATCHDOG_MS = 40 * 1000; // the server pings every 15 s
-  const READ_ONLY = new Set(['get_document', 'get_tree', 'screenshot']);
+  const READ_ONLY = new Set(['get_document', 'get_tree', 'screenshot', 'get_brand']);
 
   let token = null;
   let es = null;

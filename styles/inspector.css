@@ -84,7 +84,9 @@ body.ins-scrubbing, body.ins-scrubbing * { cursor: ew-resize !important; user-se
 
 /* ---------- colour field ---------- */
 .ins-color { display: flex; align-items: center; gap: 4px; flex: 1 1 0; min-width: 0; }
-.ins-color > .ins-hex { flex: 1 1 0; text-transform: uppercase; font-family: var(--mono); font-size: 10.5px; letter-spacing: .02em; }
+.ins-color > .ins-hex, .ins-hexwrap > .ins-hex { flex: 1 1 0; text-transform: uppercase; font-family: var(--mono); font-size: 10.5px; letter-spacing: .02em; }
+.ins-hexwrap { position: relative; flex: 1 1 0; min-width: 0; display: flex; container-type: inline-size; }
+.ins-hexwrap > .ins-hex { width: 100%; }
 .ins-color > .ins-alpha { flex: 0 0 52px; }
 .ins-color--compact > .ins-alpha { flex-basis: 46px; }
 .ins-color--compact > .ins-alpha > input { padding-right: 16px; padding-left: 6px; }
@@ -261,3 +263,113 @@ body.ins-scrubbing, body.ins-scrubbing * { cursor: ew-resize !important; user-se
   min-width: 22px; height: 18px; padding: 0 5px; border-radius: 4px; background: var(--panel-2); border: 1px solid var(--line);
   border-bottom-width: 2px; color: var(--text); font: 500 10px/15px var(--font); text-align: center; flex-shrink: 0;
 }
+
+/* ---------- brand kit links ---------- */
+/* colour field: literal parts vs linked chip */
+.ins-color.is-linked > :not(.ins-link) { display: none; }
+.ins-color:not(.is-linked) > .ins-link { display: none; }
+/* palette button inside the hex field (also used by the fill row's quick field) */
+.ins-bbtn, .ins-qbrand {
+  position: absolute; right: 2px; top: 2px; width: 22px; height: 24px; padding: 0; border: 0; border-radius: 4px;
+  background: transparent; color: var(--text-3); cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.ins-bbtn .f-icon, .ins-qbrand .f-icon { width: 13px; height: 13px; }
+.ins-bbtn:hover, .ins-bbtn.is-open, .ins-qbrand:hover, .ins-qbrand.is-open { color: var(--accent-2); background: var(--panel-3); }
+.ins-bbtn[hidden] { display: none; }
+/* narrow hex fields: the palette button appears on hover / focus; wide ones always show it */
+.ins-hexwrap > .ins-bbtn { opacity: 0; }
+.ins-color:hover .ins-bbtn, .ins-color:focus-within .ins-bbtn, .ins-bbtn.is-open { opacity: 1; background: var(--panel-2); }
+@container (min-width: 76px) {
+  .ins-hexwrap > .ins-bbtn { opacity: 1; background: transparent; }
+  .ins-hexwrap > .ins-bbtn:hover, .ins-hexwrap > .ins-bbtn.is-open { background: var(--panel-3); }
+  .ins-hexwrap.has-brand > .ins-hex { padding-right: 24px; }
+}
+/* mesh point rows: shorter labels leave room for the hex */
+.ins-prop--color > .ins-prop__label { width: 56px; }
+.ins-link {
+  flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 4px; height: 28px;
+}
+.ins-link[hidden] { display: none; }
+.ins-link__label {
+  flex: 1 1 0; min-width: 0; height: 28px; display: flex; align-items: center; gap: 5px; padding: 0 8px;
+  background: var(--accent-soft); color: var(--accent-2); border: 1px solid transparent; border-radius: var(--radius);
+  font: 500 11px/1 var(--font); cursor: pointer; text-align: left;
+}
+span.ins-link__label { cursor: default; }
+button.ins-link__label:hover, .ins-link__label.is-open { border-color: var(--accent); }
+.ins-link__label .f-icon { width: 12px; height: 12px; flex-shrink: 0; }
+.ins-link__name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+.ins-link.is-missing .ins-link__label, .ins-link__label.is-missing { background: rgba(255, 107, 107, .12); color: var(--danger, #ff6b6b); }
+.ins-link .ins-detach, .ins-detach { flex-shrink: 0; width: 24px; color: var(--text-3); }
+.ins-link .ins-detach:hover, .ins-detach:hover { color: var(--text); }
+.ins-link__icon { width: 22px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: var(--text-3); }
+.ins-link__icon .f-icon { width: 12px; height: 12px; }
+.ins-link--logo { margin-top: 6px; }
+
+/* fill row quick field */
+.ins-quick > .ins-qlink { display: none; width: 100%; padding: 0 6px; }
+.ins-quick.is-linked > .ins-qlink { display: flex; }
+.ins-quick.is-linked > .ins-hex, .ins-quick.is-linked > .ins-suffix, .ins-quick.is-linked > .ins-qbrand { display: none; }
+.ins-quick:not(.has-brand) > .ins-qbrand { display: none; }
+.ins-quick.has-brand > .ins-hex { padding-right: 24px; }
+.ins-quick.has-brand > .ins-suffix { right: 27px; }
+/* with an alpha badge there is no room for both: the palette button shows on hover instead */
+.ins-quick.has-brand.has-alpha > .ins-hex { padding-right: 30px; }
+.ins-quick.has-brand.has-alpha > .ins-suffix { right: 7px; }
+.ins-quick.has-alpha > .ins-qbrand { opacity: 0; background: var(--panel-2); }
+.ins-quick.has-alpha:hover > .ins-qbrand, .ins-quick.has-alpha:focus-within > .ins-qbrand, .ins-quick > .ins-qbrand.is-open { opacity: 1; }
+
+/* font + radius */
+.ins-font-link { width: 16px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: var(--accent-2); margin-right: -2px; }
+.ins-font-link .f-icon { width: 13px; height: 13px; }
+.ins-rad-row { margin-top: 6px; }
+.ins-rad-row__label { width: 72px; color: var(--text-3); }
+.ins-rad-presets > button { gap: 3px; font-size: 10.5px; }
+.ins-rad-presets > button > em { font-style: normal; color: var(--text-3); font-size: 9.5px; font-variant-numeric: tabular-nums; }
+.ins-rad-presets > button.is-active { color: var(--accent-2); background: var(--accent-soft); }
+.ins-rad-presets > button.is-active > em { color: var(--accent-2); opacity: .8; }
+
+/* brand logos (image section) */
+.ins-blogos { margin-top: 8px; }
+.ins-blogos > .f-label { display: block; margin-bottom: 4px; color: var(--text-3); }
+.ins-blogos__list { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.ins-blogo {
+  height: 36px; padding: 4px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
+  background: repeating-conic-gradient(#2b2b30 0 25%, #222226 0 50%) 0 0 / 10px 10px;
+}
+.ins-blogo > i { display: block; width: 100%; height: 100%; background: center / contain no-repeat; }
+.ins-blogo:hover { border-color: var(--text-3); }
+.ins-blogo.is-active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+/* CSS view: brand variables */
+.ins-code .tk-var { color: #7fd1b9; }
+
+/* ---------- popovers (brand colours, fill menu) ---------- */
+.ins-pop {
+  position: fixed; z-index: 900; width: 232px; max-height: min(420px, calc(100vh - 16px)); overflow: auto;
+  padding: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .45), 0 2px 6px rgba(0, 0, 0, .3);
+  font-size: 11px; color: var(--text);
+}
+.ins-pop__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 2px 2px 6px; font-weight: 600; }
+.ins-pop__head:not(:first-child) { margin-top: 10px; }
+.ins-pop__sub { font-weight: 400; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ins-pop__hint { margin: 8px 2px 0; font-size: 10.5px; }
+.ins-pop__item {
+  width: 100%; height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 6px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--text); font: inherit; cursor: pointer; text-align: left;
+}
+.ins-pop__item:hover { background: var(--panel-2); }
+.ins-pop__item .f-icon { width: 13px; height: 13px; color: var(--text-2); }
+.ins-bcolors { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
+.ins-bcolor {
+  display: flex; align-items: center; gap: 6px; min-width: 0; height: 28px; padding: 0 4px; border: 1px solid transparent; border-radius: 6px;
+  background: transparent; color: var(--text); font: inherit; cursor: pointer; text-align: left;
+}
+.ins-bcolor:hover { background: var(--panel-2); }
+.ins-bcolor.is-active { border-color: var(--accent); background: var(--accent-soft); }
+.ins-bcolor__sw.f-swatch { width: 20px; height: 20px; border-radius: 5px; pointer-events: none; }
+.ins-bcolor__sw > i { border-radius: 4px; }
+.ins-bcolor__name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ins-bgrads { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.ins-bgrad { height: 44px; }

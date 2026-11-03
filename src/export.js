@@ -95,6 +95,56 @@ window.Folio = window.Folio || {};
   // ---------- code generation ----------
   const SYSTEM_FONTS = ['system-ui', 'Arial', 'Helvetica', 'Georgia', 'Times New Roman', 'Courier New'];
 
+  // ---------- brand kit tokens ----------
+  // Layers link to the active brand through CSS variables (var(--color-primary), var(--font-heading),
+  // var(--radius-md)) and logos through `brand-logo:<id>` srcs. Exports carry a :root block with the
+  // variables a subtree uses (HTML + CSS, page) or resolve them to literals (inline HTML).
+  const activeBrand = () => (Folio.brand && Folio.brand.active ? Folio.brand.active() : null);
+  const VAR_RE = /var\(\s*(--(?:color|font|radius)-[\w-]+)\s*\)/g;
+
+  /** Every brand variable name (e.g. '--color-primary') referenced anywhere in a subtree. */
+  function varsUsed(id) {
+    const out = new Set();
+    [id, ...store.descendants(id)].forEach((i) => {
+      const n = store.get(i);
+      if (!n) return;
+      const json = JSON.stringify([n.style, n.text]);
+      for (const m of json.matchAll(VAR_RE)) out.add(m[1]);
+    });
+    return out;
+  }
+
+  /** The active brand's variables, limited to those used by the subtree (all of them when used is null). */
+  function brandVars(id) {
+    const b = activeBrand();
+    if (!b || !Folio.brand.cssVars) return {};
+    const all = Folio.brand.cssVars(b) || {};
+    if (id == null) return all;
+    const used = varsUsed(id);
+    const out = {};
+    Object.keys(all).forEach((k) => used.has(k) && (out[k] = all[k]));
+    return out;
+  }
+
+  /** ":root { --color-primary: …; }" for the variables a subtree uses ('' when it uses none). */
+  function rootBlockFor(id) {
+    const vars = brandVars(id);
+    const keys = Object.keys(vars);
+    if (!keys.length) return '';
+    return `:root {\n${keys.map((k) => `  ${k}: ${vars[k]};`).join('\n')}\n}`;
+  }
+
+  /** Replace brand var() references in a CSS value with literal values (for inline HTML). */
+  function resolveVars(value, vars) {
+    return String(value).replace(VAR_RE, (m, name) => (vars[name] != null ? String(vars[name]) : m));
+  }
+
+  /** `brand-logo:<id>` -> the logo's real src (data URL / URL). */
+  function resolveSrc(src) {
+    if (src && String(src).startsWith('brand-logo:')) return (Folio.brand && Folio.brand.resolveSrc && Folio.brand.resolveSrc(src)) || '';
+    return src;
+  }
+
   /** Walk the subtree once, giving every visible node a unique class name. */
   function plan(rootId) {
     const used = new Set();
@@ -158,7 +208,7 @@ window.Folio = window.Folio || {};
     const tag = tagFor(n, item.depth);
     const attrs = attrFor(item);
     if (tag === 'img') {
-      const src = (n.image && n.image.src) || '';
+      const src = resolveSrc((n.image && n.image.src) || '') || '';
       return `${indent}<img${attrs} src="${escAttr(src)}" alt="${escAttr(n.name || '')}">`;
     }
     if (n.type === 'text') {
@@ -176,25 +226,36 @@ window.Folio = window.Folio || {};
     return printHtml(tree, (it) => ` class="${it.cls}"`, indent);
   }
 
+  /** The CSS for a subtree; starts with a :root block of the brand variables it uses (if any). */
   function cssFor(id) {
     if (!store.get(id)) return '';
     const { list } = plan(id);
-    return list.map((it) => `.${it.cls} {\n${Folio.css.toCssBlock(stylesOf(it))}\n}`).join('\n\n');
+    const rules = list.map((it) => `.${it.cls} {\n${Folio.css.toCssBlock(stylesOf(it))}\n}`).join('\n\n');
+    const root = rootBlockFor(id);
+    return root ? `${root}\n\n${rules}` : rules;
   }
 
+  /** HTML with inline styles. Brand variables are resolved to literal values (there is no :root here). */
   function inlineHtmlFor(id) {
     if (!store.get(id)) return '';
     const { tree } = plan(id);
-    return printHtml(tree, (it) => ` style="${escAttr(Folio.css.toCssText(stylesOf(it)))}"`);
+    const vars = brandVars(id);
+    const inline = (styles) => {
+      const out = {};
+      Object.keys(styles).forEach((k) => (out[k] = resolveVars(styles[k], vars)));
+      return out;
+    };
+    return printHtml(tree, (it) => ` style="${escAttr(Folio.css.toCssText(inline(stylesOf(it))))}"`);
   }
 
+  /** Font families used by text layers in a subtree (brand font tokens resolved to their family). */
   function fontsUsed(id) {
     const ids = [id, ...store.descendants(id)];
     const fams = ids
       .map((i) => store.get(i))
       .filter((n) => n && n.type === 'text' && n.text && n.text.font)
-      .map((n) => n.text.font);
-    return [...new Set(fams)].filter((f) => !SYSTEM_FONTS.includes(f));
+      .map((n) => (Folio.fonts && Folio.fonts.resolve ? Folio.fonts.resolve(n.text.font) : n.text.font));
+    return [...new Set(fams)].filter((f) => f && !String(f).startsWith('var(') && !SYSTEM_FONTS.includes(f));
   }
 
   function fontLinks(id) {
@@ -477,6 +538,8 @@ ${html}
     pageFor,
     snippetFor,
     fontsUsed,
+    varsUsed,
+    rootBlockFor,
     exportPng,
     pngDataUrl,
     downloadPage,
@@ -766,6 +829,7 @@ ${html}
     el.append(handle, head, body);
 
     store.on('change', () => schedulePanel(200));
+    store.on('brand', () => schedulePanel(60));
     store.on('selection', () => schedulePanel(30));
     store.on('doc', () => schedulePanel(30));
     store.on('code:toggle', (v) => toggle(typeof v === 'boolean' ? v : undefined));

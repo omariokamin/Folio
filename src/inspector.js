@@ -163,6 +163,115 @@ window.Folio = window.Folio || {};
     return a >= 0.999 ? hex : hex + hex2(a * 255);
   }
 
+  // ---------- brand kit tokens ----------
+  // Layers link to the document's active brand with CSS variables: var(--color-primary),
+  // var(--font-heading), var(--radius-md), and `brand-logo:<id>` image srcs. The variables live on
+  // #canvas-world, not in this panel, so previews here always use resolved literal values.
+  const TOKEN_RE = /^var\(\s*--(color|font|radius)-([\w-]+)\s*\)$/;
+  const brand = () => (Folio.brand && Folio.brand.active ? Folio.brand.active() : null);
+  function tokenOf(v) {
+    if (typeof v !== 'string') return null;
+    if (Folio.brand && Folio.brand.tokenOf) return Folio.brand.tokenOf(v);
+    const m = v.trim().match(TOKEN_RE);
+    return m ? { kind: m[1], id: m[2] } : null;
+  }
+  const isColorToken = (v) => {
+    const t = tokenOf(v);
+    return !!t && t.kind === 'color';
+  };
+  /** A brand var -> its value read from the canvas (fallback when Folio.brand is missing). */
+  function varFromCanvas(name) {
+    const w = document.getElementById('canvas-world');
+    return w ? getComputedStyle(w).getPropertyValue(name).trim() : '';
+  }
+  /** Token -> literal colour (null if it can't be resolved); literals pass through. */
+  function resolveColor(v) {
+    if (!isColorToken(v)) return v;
+    let out = Folio.brand && Folio.brand.resolveColor ? Folio.brand.resolveColor(v) : null;
+    if (!out || isColorToken(out)) out = varFromCanvas('--color-' + tokenOf(v).id) || null;
+    return out;
+  }
+  /** Replace every colour token inside a CSS string with its literal value (for previews). */
+  function resolveStr(str) {
+    if (typeof str !== 'string' || str.indexOf('var(') < 0) return str;
+    return str.replace(/var\(\s*--color-[\w-]+\s*\)/g, (m) => resolveColor(m) || 'transparent');
+  }
+  /** Deep copy of a fill (or any value) with colour tokens resolved — for swatch previews. */
+  function resolveDeep(v) {
+    if (typeof v === 'string') return resolveStr(v);
+    if (Array.isArray(v)) return v.map(resolveDeep);
+    if (v && typeof v === 'object') {
+      const o = {};
+      Object.keys(v).forEach((k) => (o[k] = resolveDeep(v[k])));
+      return o;
+    }
+    return v;
+  }
+  const brandColor = (id) => {
+    const b = brand();
+    return b && (b.colors || []).find((c) => c.id === id);
+  };
+  const brandFont = (id) => {
+    const b = brand();
+    return b && (b.fonts || []).find((f) => f.id === id);
+  };
+  const colorRef = (id) => (Folio.brand && Folio.brand.colorRef ? Folio.brand.colorRef(id) : `var(--color-${id})`);
+  const fontRef = (id) => (Folio.brand && Folio.brand.fontRef ? Folio.brand.fontRef(id) : `var(--font-${id})`);
+  const radiusRef = (k) => `var(--radius-${k})`;
+  /** Human name of a colour token ("Primary"), falling back to its id. */
+  function tokenName(v) {
+    const t = tokenOf(v);
+    if (!t) return '';
+    const c = t.kind === 'color' ? brandColor(t.id) : t.kind === 'font' ? brandFont(t.id) : null;
+    if (c && c.name) return c.name;
+    return t.id.replace(/^c_/, '').replace(/[-_]/g, ' ').replace(/^./, (m) => m.toUpperCase());
+  }
+  /** Font family a font value renders with (tokens resolved). */
+  function resolveFamily(v) {
+    if (Folio.fonts && Folio.fonts.resolve) return Folio.fonts.resolve(v);
+    return v;
+  }
+  /** Brand radius value (px number) for 'sm' | 'md' | 'lg', or null. */
+  function brandRadius(k) {
+    const b = brand();
+    const r = b && b.style && b.style.radius;
+    if (r && r[k] != null && isFinite(r[k])) return Number(r[k]);
+    const v = parseFloat(varFromCanvas('--radius-' + k));
+    return isFinite(v) ? v : null;
+  }
+  /** Any radius value -> a number of px (tokens resolved). */
+  function radiusNum(r) {
+    if (typeof r === 'number') return r;
+    if (typeof r === 'string') {
+      const t = tokenOf(r);
+      if (t && t.kind === 'radius') return brandRadius(t.id) || 0;
+      return parseFloat(r) || 0;
+    }
+    return 0;
+  }
+  /** The brand logo for a `brand-logo:<id>` src. */
+  function brandLogo(src) {
+    if (typeof src !== 'string' || !src.startsWith('brand-logo:')) return null;
+    const b = brand();
+    return (b && (b.logos || []).find((l) => l.id === src.slice(11))) || { id: src.slice(11), name: 'Missing logo', src: '' };
+  }
+  const resolveSrc = (src) => {
+    if (typeof src === 'string' && src.startsWith('brand-logo:')) return Folio.brand && Folio.brand.resolveSrc ? Folio.brand.resolveSrc(src) || '' : '';
+    return src;
+  };
+  /** Signature of the brand bits the panel's structure depends on (fonts list, radius buttons, logos). */
+  function brandKey() {
+    const b = brand();
+    if (!b) return 'nobrand';
+    const r = (b.style && b.style.radius) || {};
+    return [
+      b.id,
+      (b.fonts || []).map((f) => f.id + ':' + f.name + ':' + f.family).join(','),
+      [r.sm, r.md, r.lg].join(','),
+      (b.logos || []).map((l) => l.id).join(','),
+    ].join('/');
+  }
+
   // ---------- extra icons (beyond Folio.icons) ----------
   const EXTRA = {
     justify: '<path d="M4 6h16M4 10h16M4 14h16M4 18h16"/>',
@@ -187,6 +296,9 @@ window.Folio = window.Folio || {};
     swap: '<path d="M7 20V4M4 7l3-3 3 3M17 4v16M14 17l3 3 3-3"/>',
     'gap-h': '<rect x="3" y="5" width="6" height="14" rx="1"/><rect x="15" y="5" width="6" height="14" rx="1"/><path d="M12 9v6"/>',
     'gap-v': '<rect x="5" y="3" width="14" height="6" rx="1"/><rect x="5" y="15" width="14" height="6" rx="1"/><path d="M9 12h6"/>',
+    link: '<path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/>',
+    unlink: '<path d="M10 14a4 4 0 005.7 0l1.2-1.2M19 9.5a4 4 0 00-5.7-4.2M14 10a4 4 0 00-5.7 0L7 11.3M5 14.5a4 4 0 005.7 4.2M4 4l16 16"/>',
+    palette: '<path d="M12 3a9 9 0 100 18c1.1 0 1.6-.8 1.6-1.6 0-.5-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.9.7-1.6 1.6-1.6H16a5 5 0 005-5c0-4.1-4-7.6-9-7.6z"/><circle cx="7.5" cy="11" r="1.2"/><circle cx="10.5" cy="7" r="1.2"/><circle cx="15" cy="7.5" r="1.2"/>',
   };
   function icon(name) {
     if (EXTRA[name]) {
@@ -392,8 +504,110 @@ window.Folio = window.Folio || {};
     return row;
   }
 
+  // ---------- popovers (brand swatches, fill menu) ----------
+  let pop = null; // { el, anchor, off() }
+  function closePopover() {
+    if (!pop) return;
+    const p = pop;
+    pop = null;
+    p.off();
+    p.el.remove();
+    if (p.anchor && p.anchor.classList) p.anchor.classList.remove('is-open');
+  }
+  /** Show `content` in a small floating panel next to `anchor` (closes on outside click / Esc / scroll). */
+  function openPopover(anchor, content, cls) {
+    const same = pop && pop.anchor === anchor;
+    closePopover();
+    if (same) return null; // clicking the anchor again toggles it closed
+    const el = h('div', { class: 'ins-pop' + (cls ? ' ' + cls : ''), role: 'dialog' }, content);
+    document.body.appendChild(el);
+    const r = anchor.getBoundingClientRect();
+    const pw = el.offsetWidth;
+    const ph = el.offsetHeight;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    let left = Math.min(r.right - pw, vw - pw - 8);
+    left = Math.max(8, left);
+    let top = r.bottom + 4;
+    if (top + ph > vh - 8) top = Math.max(8, r.top - ph - 4);
+    el.style.left = Math.round(left) + 'px';
+    el.style.top = Math.round(top) + 'px';
+    anchor.classList.add('is-open');
+    const onDown = (e) => {
+      if (el.contains(e.target) || anchor.contains(e.target)) return;
+      closePopover();
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        closePopover();
+      }
+    };
+    const onScroll = (e) => {
+      if (!el.contains(e.target)) closePopover();
+    };
+    document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('keydown', onKey, true);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', closePopover);
+    pop = {
+      el,
+      anchor,
+      off() {
+        document.removeEventListener('pointerdown', onDown, true);
+        document.removeEventListener('keydown', onKey, true);
+        window.removeEventListener('scroll', onScroll, true);
+        window.removeEventListener('resize', closePopover);
+      },
+    };
+    return el;
+  }
+
+  /** Grid of brand colour buttons. current: the value now in use (to mark the linked one). */
+  function brandColorGrid(current, onPick) {
+    const b = brand();
+    const t = tokenOf(current);
+    const cur = t && t.kind === 'color' ? t.id : null;
+    return h(
+      'div',
+      { class: 'ins-bcolors' },
+      ...((b && b.colors) || []).map((c) => {
+        const btn = h(
+          'button',
+          { type: 'button', class: 'ins-bcolor' + (c.id === cur ? ' is-active' : ''), title: `${c.name} · ${c.value}`, dataset: { color: c.id } },
+          h('span', { class: 'f-swatch ins-bcolor__sw' }, h('i', { style: { background: c.value } })),
+          h('span', { class: 'ins-bcolor__name' }, c.name)
+        );
+        btn.addEventListener('click', () => {
+          closePopover();
+          onPick(c.id);
+        });
+        return btn;
+      })
+    );
+  }
+
+  /** Popover with the active brand's colours; picking one links the field to it. */
+  function openBrandColors(anchor, current, onPick) {
+    const b = brand();
+    if (!b) return;
+    openPopover(
+      anchor,
+      h(
+        'div',
+        {},
+        h('div', { class: 'ins-pop__head' }, h('span', {}, 'Brand colours'), h('span', { class: 'ins-pop__sub' }, b.name || '')),
+        (b.colors || []).length ? brandColorGrid(current, onPick) : h('div', { class: 'f-hint' }, 'This brand has no colours yet.'),
+        h('div', { class: 'f-hint ins-pop__hint' }, 'Linked colours update when the brand changes.')
+      ),
+      'ins-pop--colors'
+    );
+  }
+
   /**
-   * Color field: swatch (opens native picker) + hex text + alpha %.
+   * Color field: swatch (opens native picker) + hex text + alpha %, or — when the value is a brand
+   * token like var(--color-primary) — a linked chip with the brand colour's name and a detach button.
+   * A palette button links a brand colour (only while the document has an active brand).
    * o: { key, get() -> css color, set(color), commitLabel, noAlpha, compact }
    */
   function colorField(o) {
@@ -409,7 +623,12 @@ window.Folio = window.Folio || {};
       title: 'Any CSS colour: hex, rgb(), hsl(), names…',
     });
     const label = o.commitLabel || 'Edit colour';
-    const cur = () => splitColor(o.get());
+    const raw = () => o.get();
+    const literal = () => {
+      const v = raw();
+      return isColorToken(v) ? resolveColor(v) || '#000000' : v;
+    };
+    const cur = () => splitColor(literal());
 
     native.addEventListener('input', () => {
       o.set(joinColor(native.value.toLowerCase(), cur().alpha));
@@ -449,14 +668,14 @@ window.Folio = window.Folio || {};
       hex.value = hexShown = cur().hex.slice(1).toUpperCase();
     };
     const showSwatch = () => {
-      const c = o.get();
-      chip.style.background = c || 'transparent';
+      chip.style.background = literal() || 'transparent';
       native.value = cur().hex;
     };
     bind(hex, showHex);
     bind(sw, showSwatch);
 
-    const parts = [sw, hex];
+    const hexWrap = h('span', { class: 'ins-hexwrap' }, hex);
+    const parts = [sw, hexWrap];
     if (!o.noAlpha) {
       parts.push(
         numField({
@@ -472,7 +691,46 @@ window.Folio = window.Folio || {};
         })
       );
     }
-    return h('div', { class: 'ins-color' + (o.compact ? ' ins-color--compact' : '') }, ...parts);
+
+    // ---- brand link ----
+    const link = (id) => {
+      o.set(colorRef(id));
+      commit('Link brand colour');
+    };
+    const bbtn = h('button', { type: 'button', class: 'ins-bbtn', title: 'Link a brand colour', 'aria-label': 'Link a brand colour', 'data-k': o.key + '.brand' }, icon('palette'));
+    bbtn.addEventListener('click', () => openBrandColors(bbtn, raw(), link));
+    const lchip = h('i');
+    const lsw = h('button', { type: 'button', class: 'f-swatch ins-swatch ins-link__sw', title: 'Change brand colour' }, lchip);
+    const lname = h('span', { class: 'ins-link__name' });
+    const lbtn = h('button', { type: 'button', class: 'ins-link__label', title: 'Linked to a brand colour — click to pick another' }, icon('link'), lname);
+    [lsw, lbtn].forEach((b) => b.addEventListener('click', () => openBrandColors(lbtn, raw(), link)));
+    const detach = h('button', { type: 'button', class: 'f-btn f-btn--ghost f-btn--icon ins-ibtn ins-detach', title: 'Detach from brand (keep the colour as a plain value)', 'aria-label': 'Detach from brand colour' }, icon('unlink'));
+    detach.addEventListener('click', () => {
+      const lit = resolveColor(raw());
+      o.set((lit && parseColor(lit)) || lit || '#000000');
+      commit('Detach brand colour');
+      detach.blur();
+    });
+    const linked = h('div', { class: 'ins-link' }, lsw, lbtn, detach);
+    hexWrap.appendChild(bbtn); // sits inside the hex field's right end
+    parts.push(linked);
+
+    const wrap = h('div', { class: 'ins-color' + (o.compact ? ' ins-color--compact' : '') }, ...parts);
+    bind(wrap, () => {
+      const v = raw();
+      const isLinked = isColorToken(v);
+      const lit = isLinked ? resolveColor(v) : null;
+      wrap.classList.toggle('is-linked', isLinked);
+      linked.classList.toggle('is-missing', isLinked && !lit);
+      if (isLinked) {
+        lchip.style.background = lit || 'transparent';
+        lname.textContent = tokenName(v) + (lit ? '' : ' (missing)');
+        lbtn.title = `Linked to brand colour “${tokenName(v)}”${lit ? ' · ' + lit : ''} — click to pick another`;
+      }
+      bbtn.hidden = isLinked || !brand();
+      hexWrap.classList.toggle('has-brand', !bbtn.hidden);
+    });
+    return wrap;
   }
 
   /** options: [[value, label]] or [{ group, options: [[v, l]] }] */
@@ -1140,10 +1398,13 @@ window.Folio = window.Folio || {};
     radiusToggle.addEventListener('click', () => {
       patchSel((n) => {
         const r = n.style.radius;
-        return { style: { radius: Array.isArray(r) ? r[0] || 0 : [r || 0, r || 0, r || 0, r || 0] } };
+        const v = radiusNum(r);
+        return { style: { radius: Array.isArray(r) ? r[0] || 0 : [v, v, v, v] } };
       });
       commit('Corner radius');
     });
+    const radTok = tokenOf(p.style.radius);
+    const radLinked = !!radTok && radTok.kind === 'radius';
     body.push(
       row(
         h(
@@ -1162,11 +1423,13 @@ window.Folio = window.Folio || {};
           }),
           indep
             ? h('div', { class: 'ins-spacer ins-hint-cell' }, h('span', { class: 'f-hint' }, 'Corners'))
+            : radLinked
+            ? radiusLinkChip()
             : numField({
                 key: 'radius',
                 label: () => icon('radius'),
                 title: 'Corner radius',
-                get: () => (Array.isArray(P().style.radius) ? P().style.radius[0] : P().style.radius || 0),
+                get: () => (Array.isArray(P().style.radius) ? P().style.radius[0] : radiusNum(P().style.radius)),
                 set: (v) => patchSel({ style: { radius: v } }),
                 min: 0,
                 commitLabel: 'Corner radius',
@@ -1197,6 +1460,7 @@ window.Folio = window.Folio || {};
         });
       body.push(h('div', { class: 'f-row ins-quad' }, corner(0, '↖', 'Top left'), corner(1, '↗', 'Top right'), corner(2, '↘', 'Bottom right'), corner(3, '↙', 'Bottom left')));
     }
+    if (brand()) body.push(radiusPresets());
     body.push(
       row(
         h(
@@ -1225,6 +1489,50 @@ window.Folio = window.Folio || {};
       )
     );
     return section('appearance', 'Appearance', {}, ...body);
+  }
+
+  /** Linked brand radius ("md · 12") with a detach button, in place of the radius number. */
+  function radiusLinkChip() {
+    const name = h('span', { class: 'ins-link__name' });
+    const lab = h('span', { class: 'ins-link__label', title: 'Corner radius linked to the brand radius' }, icon('link'), name);
+    const detach = h('button', { type: 'button', class: 'f-btn f-btn--ghost f-btn--icon ins-ibtn ins-detach', title: 'Detach from brand radius (keep the number)', 'aria-label': 'Detach from brand radius' }, icon('unlink'));
+    detach.addEventListener('click', () => {
+      patchSel((n) => (tokenOf(n.style.radius) ? { style: { radius: radiusNum(n.style.radius) } } : {}));
+      commit('Detach brand radius');
+    });
+    const chip = h('div', { class: 'ins-link ins-link--radius' }, lab, detach);
+    bind(chip, () => {
+      const t = tokenOf(P().style.radius);
+      if (!t) return;
+      const v = brandRadius(t.id);
+      name.textContent = `${t.id.toUpperCase()} · ${v == null ? '?' : fmt(v)}`;
+      chip.classList.toggle('is-missing', v == null);
+    });
+    return chip;
+  }
+
+  /** Quick radius buttons: brand sm / md / lg (linked tokens) and pill (9999). */
+  function radiusPresets() {
+    const b = brand();
+    const opts = [];
+    if (b) ['sm', 'md', 'lg'].forEach((k) => brandRadius(k) != null && opts.push({ value: radiusRef(k), label: k.toUpperCase(), sub: fmt(brandRadius(k)), title: `Brand radius ${k} (${fmt(brandRadius(k))}px) — linked` }));
+    opts.push({ value: 9999, label: 'Pill', sub: '', title: 'Fully rounded (9999)' });
+    const seg = h('div', { class: 'f-seg ins-seg ins-rad-presets' });
+    const btns = opts.map((op) => {
+      const btn = h('button', { type: 'button', title: op.title, 'aria-label': op.title, dataset: { radius: String(op.value) } }, h('span', {}, op.label), op.sub ? h('em', {}, op.sub) : null);
+      btn.addEventListener('click', () => {
+        patchSel({ style: { radius: op.value } });
+        commit(typeof op.value === 'string' ? 'Link brand radius' : 'Corner radius');
+        btn.blur();
+      });
+      seg.appendChild(btn);
+      return btn;
+    });
+    bind(seg, () => {
+      const r = P().style.radius;
+      btns.forEach((btn, i) => btn.classList.toggle('is-active', opts[i].value === r));
+    });
+    return h('div', { class: 'f-row ins-rad-row' }, h('span', { class: 'f-label ins-rad-row__label' }, b ? 'Brand radius' : 'Radius'), seg);
   }
 
   // ---------------- fills ----------------
@@ -1305,8 +1613,8 @@ window.Folio = window.Folio || {};
       const f = getFill();
       chip.removeAttribute('style');
       if (!f) return;
-      const css = Folio.css.fillsToCss([Object.assign({}, f, { visible: true })]);
-      if (f.type === 'image' && !f.src) {
+      const css = Folio.css.fillsToCss([Object.assign(resolveDeep(f), { visible: true })]);
+      if (f.type === 'image' && !resolveSrc(f.src)) {
         chip.style.background = 'repeating-linear-gradient(45deg,#3a3a40 0 3px,#2b2b30 3px 6px)';
         return;
       }
@@ -1318,43 +1626,63 @@ window.Folio = window.Folio || {};
 
   function fillQuick(f, i, key) {
     switch (f.type) {
-      case 'solid':
-        return h(
-          'div',
-          { class: 'ins-quick' },
-          (() => {
-            const inp = h('input', { class: 'f-input ins-hex', type: 'text', spellcheck: 'false', 'data-k': key + '.qhex', title: 'Colour' });
-            const show = () => {
-              const ff = fillAt(i);
-              inp.value = ff && ff.color ? splitColor(ff.color).hex.slice(1).toUpperCase() : '';
-            };
-            const apply = () => {
-              const c = parseColor(inp.value);
-              if (!c) return false;
-              const ff = fillAt(i);
-              const typedAlpha = /^#?[0-9a-f]{8}$/i.test(inp.value.trim()) || /rgba|hsla|\/|transparent/i.test(inp.value);
-              patchFill(i, { color: typedAlpha ? c : joinColor(splitColor(c).hex, splitColor(ff.color).alpha) });
-              return true;
-            };
-            inp.addEventListener('input', apply);
-            inp.addEventListener('change', () => {
-              if (apply()) commit('Fill colour');
-              show();
-            });
-            inp.addEventListener('keydown', (e) => e.key === 'Enter' && inp.blur());
-            bind(inp, show);
-            return inp;
-          })(),
-          (() => {
-            const em = h('em', { class: 'ins-suffix', title: 'Opacity (edit in the fill editor)' });
-            bind(em, () => {
-              const ff = fillAt(i);
-              const a = ff && ff.color ? splitColor(ff.color).alpha : 1;
-              em.textContent = a < 0.999 ? Math.round(a * 100) + '%' : '';
-            });
-            return em;
-          })()
-        );
+      case 'solid': {
+        const inp = h('input', { class: 'f-input ins-hex', type: 'text', spellcheck: 'false', 'data-k': key + '.qhex', title: 'Colour' });
+        const lit = () => {
+          const ff = fillAt(i);
+          const c = ff && ff.color;
+          return isColorToken(c) ? resolveColor(c) || '#000000' : c;
+        };
+        const show = () => {
+          const c = lit();
+          inp.value = c ? splitColor(c).hex.slice(1).toUpperCase() : '';
+        };
+        const apply = () => {
+          const c = parseColor(inp.value);
+          if (!c) return false;
+          const typedAlpha = /^#?[0-9a-f]{8}$/i.test(inp.value.trim()) || /rgba|hsla|\/|transparent/i.test(inp.value);
+          patchFill(i, { color: typedAlpha ? c : joinColor(splitColor(c).hex, splitColor(lit()).alpha) });
+          return true;
+        };
+        inp.addEventListener('input', apply);
+        inp.addEventListener('change', () => {
+          if (apply()) commit('Fill colour');
+          show();
+        });
+        inp.addEventListener('keydown', (e) => e.key === 'Enter' && inp.blur());
+        bind(inp, show);
+        const em = h('em', { class: 'ins-suffix', title: 'Opacity (edit in the fill editor)' });
+        bind(em, () => {
+          const c = lit();
+          const a = c ? splitColor(c).alpha : 1;
+          em.textContent = a < 0.999 ? Math.round(a * 100) + '%' : '';
+        });
+        // linked brand colour: a chip with the colour's name instead of the hex field
+        const link = (id) => {
+          patchFill(i, { color: colorRef(id) });
+          commit('Link brand colour');
+        };
+        const lname = h('span', { class: 'ins-link__name' });
+        const lbtn = h('button', { type: 'button', class: 'ins-link__label ins-qlink', title: 'Linked to a brand colour — click to pick another' }, icon('link'), lname);
+        lbtn.addEventListener('click', () => openBrandColors(lbtn, fillAt(i) && fillAt(i).color, link));
+        const bbtn = h('button', { type: 'button', class: 'ins-qbrand', title: 'Link a brand colour', 'aria-label': 'Link a brand colour', 'data-k': key + '.qbrand' }, icon('palette'));
+        bbtn.addEventListener('click', () => openBrandColors(bbtn, fillAt(i) && fillAt(i).color, link));
+        const box = h('div', { class: 'ins-quick' }, inp, em, lbtn, bbtn);
+        bind(box, () => {
+          const ff = fillAt(i);
+          const c = ff && ff.color;
+          const linked = isColorToken(c);
+          box.classList.toggle('is-linked', linked);
+          box.classList.toggle('has-brand', !!brand() && !linked);
+          box.classList.toggle('has-alpha', !linked && !!c && splitColor(lit()).alpha < 0.999);
+          if (linked) {
+            const l = resolveColor(c);
+            lname.textContent = tokenName(c) + (l ? '' : ' (missing)');
+            lbtn.classList.toggle('is-missing', !l);
+          }
+        });
+        return box;
+      }
       case 'linear':
       case 'conic':
         return numField({
@@ -1407,13 +1735,20 @@ window.Folio = window.Folio || {};
   function buildFills(p) {
     const fills = p.style.fills || [];
     const isText = p.type === 'text';
-    const add = iconBtn('plus', 'Add fill', () => {
-      const has = (P().style.fills || []).length;
+    const addFill = (fill, label) => {
       listOp('fills', (arr) => {
-        arr.push({ type: 'solid', color: has ? '#00000033' : '#d9d9d9', visible: true });
+        arr.push(Object.assign(clone(fill), { visible: true }));
       });
       ui.expandedFill = P().id + ':' + ((P().style.fills || []).length - 1);
-      commit('Add fill');
+      commit(label || 'Add fill');
+    };
+    const addPlain = () => addFill({ type: 'solid', color: (P().style.fills || []).length ? '#00000033' : '#d9d9d9' });
+    // with an active brand, "+" opens a menu: plain fill, brand colours, brand gradients
+    const add = iconBtn('plus', 'Add fill', () => {
+      const b = brand();
+      const grads = (b && b.style && Array.isArray(b.style.gradients) ? b.style.gradients : []).filter((g) => g && g.fill && g.fill.type);
+      if (!b || (!grads.length && !(b.colors || []).length)) return addPlain();
+      openFillMenu(add, b, grads, addPlain, addFill);
     });
     const presetsBtn = iconBtn('sparkle', 'Mesh gradient presets', () => {
       ui.meshPresets = !ui.meshPresets;
@@ -1436,6 +1771,43 @@ window.Folio = window.Folio || {};
     // top-most fill first (like layers)
     for (let i = fills.length - 1; i >= 0; i--) body.push(buildFillRow(p, fills[i], i, fills.length));
     return section('fill', isText ? 'Background' : 'Fill', { actions: [presetsBtn, add], empty: !fills.length && !ui.meshPresets }, ...body);
+  }
+
+  /** The fill "+" menu shown while the document has an active brand. */
+  function openFillMenu(anchor, b, grads, addPlain, addFill) {
+    const plain = h('button', { type: 'button', class: 'ins-pop__item' }, icon('plus'), h('span', {}, 'Solid fill'));
+    plain.addEventListener('click', () => {
+      closePopover();
+      addPlain();
+    });
+    const parts = [plain];
+    if ((b.colors || []).length) {
+      parts.push(
+        h('div', { class: 'ins-pop__head' }, h('span', {}, 'Brand colour')),
+        brandColorGrid(null, (id) => addFill({ type: 'solid', color: colorRef(id) }, 'Add brand colour fill'))
+      );
+    }
+    if (grads.length) {
+      parts.push(
+        h('div', { class: 'ins-pop__head' }, h('span', {}, 'Brand gradients')),
+        h(
+          'div',
+          { class: 'ins-bgrads' },
+          ...grads.map((g) => {
+            const btn = h('button', { type: 'button', class: 'ins-mesh-preset ins-bgrad', title: `${g.name || 'Gradient'} — click to add on top`, dataset: { gradient: g.name || '' } });
+            const css = Folio.css.fillsToCss([Object.assign(resolveDeep(g.fill), { visible: true })]);
+            Object.entries(css).forEach(([k, v]) => btn.style.setProperty(k, v));
+            btn.appendChild(h('span', {}, g.name || 'Gradient'));
+            btn.addEventListener('click', () => {
+              closePopover();
+              addFill(g.fill, 'Add brand gradient');
+            });
+            return btn;
+          })
+        )
+      );
+    }
+    openPopover(anchor, h('div', {}, ...parts), 'ins-pop--fill');
   }
 
   function meshPresetStrip(onPick, hint) {
@@ -1554,6 +1926,7 @@ window.Folio = window.Folio || {};
           commit('Mesh preset');
         }, 'Click to apply'));
         ed.appendChild(propRow('Base', colorField({ key: key + '.base', get: () => get().base, set: (c) => patchFill(i, { base: c }), commitLabel: 'Mesh colour', noAlpha: true })));
+        ed.lastChild.classList.add('ins-prop--color');
         (f.points || []).forEach((pt, j) => {
           ed.appendChild(
             propRow(
@@ -1571,6 +1944,7 @@ window.Folio = window.Folio || {};
               })
             )
           );
+          ed.lastChild.classList.add('ins-prop--color');
         });
         ed.appendChild(
           row(
@@ -1678,12 +2052,12 @@ window.Folio = window.Folio || {};
       const ff = get();
       const stops = ff.stops || [];
       const sorted = stops.slice().sort((a, b) => a.pos - b.pos);
-      barFill.style.background = `linear-gradient(90deg, ${sorted.map((s) => `${s.color} ${s.pos}%`).join(', ')})`;
+      barFill.style.background = `linear-gradient(90deg, ${sorted.map((s) => `${resolveStr(s.color)} ${s.pos}%`).join(', ')})`;
       handles.forEach((hd, j) => {
         const s = stops[j];
         if (!s) return;
         hd.style.left = s.pos + '%';
-        hd.firstChild.style.background = s.color;
+        hd.firstChild.style.background = resolveStr(s.color);
         hd.classList.toggle('is-active', j === ui.selectedStop);
       });
     });
@@ -1768,7 +2142,7 @@ window.Folio = window.Folio || {};
     const box = h('div', { class: 'ins-image' });
     const thumb = h('div', { class: 'ins-thumb' });
     bind(thumb, () => {
-      const src = getSrc();
+      const src = resolveSrc(getSrc());
       thumb.style.backgroundImage = src ? `url("${src.replace(/"/g, '%22')}")` : '';
       thumb.classList.toggle('is-empty', !src);
       thumb.textContent = src ? '' : 'No image';
@@ -1791,12 +2165,12 @@ window.Folio = window.Folio || {};
           title: 'Image URL',
           get: () => {
             const s = getSrc() || '';
-            return s.startsWith('data:') ? '' : s;
+            return s.startsWith('data:') || s.startsWith('brand-logo:') ? '' : s;
           },
           set: (v, final) => {
             if (!final) return;
             const s = v.trim();
-            if (s || !(getSrc() || '').startsWith('data:')) setSrc(s);
+            if (s || !/^(data:|brand-logo:)/.test(getSrc() || '')) setSrc(s);
           },
           commitLabel: 'Image URL',
         })
@@ -1810,6 +2184,51 @@ window.Folio = window.Folio || {};
       note.style.display = s.startsWith('data:') ? '' : 'none';
     });
     box.appendChild(note);
+
+    // brand logos: a linked chip (src = brand-logo:<id>) and one-click logo buttons
+    const lname = h('span', { class: 'ins-link__name' });
+    const detach = h('button', { type: 'button', class: 'f-btn f-btn--ghost f-btn--icon ins-ibtn ins-detach', title: 'Detach from brand logo (embed this image)', 'aria-label': 'Detach from brand logo' }, icon('unlink'));
+    detach.addEventListener('click', () => {
+      const src = resolveSrc(getSrc());
+      if (src) {
+        setSrc(src);
+        commit('Detach brand logo');
+      }
+    });
+    const chip = h('div', { class: 'ins-link ins-link--logo' }, h('span', { class: 'ins-link__label', title: 'Linked to a brand logo — replacing the logo in the brand updates it here' }, icon('link'), lname), detach);
+    bind(chip, () => {
+      const l = brandLogo(getSrc());
+      chip.hidden = !l;
+      if (l) {
+        lname.textContent = l.name || 'Logo';
+        chip.classList.toggle('is-missing', !l.src);
+      }
+    });
+    box.appendChild(chip);
+    const b = brand();
+    const logos = (b && b.logos) || [];
+    if (logos.length) {
+      const strip = h(
+        'div',
+        { class: 'ins-blogos' },
+        h('span', { class: 'f-label' }, 'Brand logos'),
+        h(
+          'div',
+          { class: 'ins-blogos__list' },
+          ...logos.map((l) => {
+            const btn = h('button', { type: 'button', class: 'ins-blogo', title: `${l.name || 'Logo'} — use (linked)`, dataset: { logo: l.id } }, h('i', { style: { backgroundImage: l.src ? `url("${String(l.src).replace(/"/g, '%22')}")` : '' } }));
+            btn.addEventListener('click', () => {
+              setSrc('brand-logo:' + l.id);
+              commit('Use brand logo');
+              btn.blur();
+            });
+            bind(btn, () => btn.classList.toggle('is-active', getSrc() === 'brand-logo:' + l.id));
+            return btn;
+          })
+        )
+      );
+      box.appendChild(strip);
+    }
     return box;
   }
 
@@ -1849,9 +2268,13 @@ window.Folio = window.Folio || {};
 
     // font family
     const fonts = Folio.fonts ? Folio.fonts.list : [];
-    const inList = fonts.some((f) => f.family === p.text.font);
+    const b = brand();
+    const brandFonts = (b && b.fonts) || [];
+    const fontTok = tokenOf(p.text.font);
+    const isFontTok = !!fontTok && fontTok.kind === 'font';
+    const inList = fonts.some((f) => f.family === p.text.font) || (isFontTok && brandFonts.some((f) => fontRef(f.id) === p.text.font));
     if (ui.customFont) {
-      const inp = h('input', { class: 'f-input', type: 'text', placeholder: 'Any Google Font, e.g. Syne', spellcheck: 'false', 'data-k': 'customfont', value: inList ? '' : p.text.font });
+      const inp = h('input', { class: 'f-input', type: 'text', placeholder: 'Any Google Font, e.g. Syne', spellcheck: 'false', 'data-k': 'customfont', value: inList || isFontTok ? '' : p.text.font });
       const apply = () => {
         const v = inp.value.trim();
         ui.customFont = false;
@@ -1882,10 +2305,30 @@ window.Folio = window.Folio || {};
       fonts.forEach((f) => (cats[f.category] = cats[f.category] || []).push([f.family, f.family]));
       const catLabel = (c) => c.replace(/-/g, ' ').replace(/^./, (m) => m.toUpperCase());
       const opts = Object.keys(cats).map((c) => ({ group: catLabel(c), options: cats[c] }));
-      if (!inList) opts.unshift({ group: 'Custom', options: [[p.text.font, p.text.font]] });
+      if (!inList) {
+        const label = isFontTok ? `${tokenName(p.text.font)} (not in brand)` : p.text.font;
+        opts.unshift({ group: 'Custom', options: [[p.text.font, label]] });
+      }
+      // brand fonts first, linked through var(--font-<id>)
+      if (brandFonts.length) {
+        opts.unshift({ group: 'Brand' + (b.name ? ' · ' + b.name : ''), options: brandFonts.map((f) => [fontRef(f.id), `${f.name} · ${f.family}`]) });
+      }
       opts.push(['__custom', 'Custom Google Font…']);
+      const detachFont = isFontTok
+        ? iconBtn('unlink', 'Detach from brand font (keep the family as a plain value)', () => {
+            selIds().forEach((id) => {
+              const n = store.get(id);
+              if (!isText(n) || !tokenOf(n.text.font)) return;
+              const fam = resolveFamily(n.text.font);
+              if (fam && !String(fam).startsWith('var(')) store.update(id, { text: { font: fam } });
+            });
+            commit('Detach brand font');
+          })
+        : null;
+      if (detachFont) detachFont.classList.add('ins-detach');
       body.push(
         row(
+          isFontTok ? h('span', { class: 'ins-font-link', title: `Linked to brand font “${tokenName(p.text.font)}” (${resolveFamily(p.text.font)})` }, icon('link')) : null,
           selectField({
             key: 'font',
             cls: 'ins-font',
@@ -1900,16 +2343,22 @@ window.Folio = window.Folio || {};
               }
               if (Folio.fonts) Folio.fonts.ensure(v);
               const ws = Folio.fonts ? Folio.fonts.weightsOf(v) : [400];
+              // linking a brand font also takes the brand's weight for it
+              const bt = tokenOf(v);
+              const bf = bt && bt.kind === 'font' ? brandFont(bt.id) : null;
+              const bw = bf && Number(bf.weight);
               selIds().forEach((id) => {
                 const n = store.get(id);
                 if (!isText(n)) return;
                 // keep the weight if the new family has it, otherwise pick the closest
-                const w = ws.includes(n.text.weight) ? n.text.weight : ws.reduce((a, b) => (Math.abs(b - n.text.weight) < Math.abs(a - n.text.weight) ? b : a), ws[0]);
+                const want = bw && ws.includes(bw) ? bw : n.text.weight;
+                const w = ws.includes(want) ? want : ws.reduce((a, b) => (Math.abs(b - want) < Math.abs(a - want) ? b : a), ws[0]);
                 store.update(id, { text: { font: v, weight: w } });
               });
             },
             commitLabel: 'Font',
-          })
+          }),
+          detachFont
         )
       );
     }
@@ -2120,16 +2569,21 @@ window.Folio = window.Folio || {};
   function highlightValue(v) {
     // tokenise: urls, colours, numbers with units, keywords
     let out = '';
-    const re = /(url\("[^"]*"\))|(#[0-9a-fA-F]{3,8}\b)|(rgba?\([^)]*\))|(-?\d*\.?\d+)(px|%|deg|em|s)?|([a-zA-Z-]+(?=\())|([^#\d(u-]+|.)/g;
+    const re = /(url\("[^"]*"\))|(#[0-9a-fA-F]{3,8}\b)|(rgba?\([^)]*\))|(var\(--[\w-]+\))|(-?\d*\.?\d+)(px|%|deg|em|s)?|([a-zA-Z-]+(?=\())|([^#\d(uv-]+|.)/g;
     let m;
     while ((m = re.exec(v))) {
       if (m[1]) out += `<span class="tk-url">${esc(m[1])}</span>`;
+      else if (m[4]) {
+        // brand token: swatch (resolved colour) + the var() as written
+        const c = isColorToken(m[4]) ? resolveColor(m[4]) : null;
+        out += (c ? `<span class="tk-swatch" style="background:${esc(c)}"></span>` : '') + `<span class="tk-var" title="${esc(tokenName(m[4]))}">${esc(m[4])}</span>`;
+      }
       else if (m[2] || m[3]) {
         const c = m[2] || m[3];
         out += `<span class="tk-swatch" style="background:${esc(c)}"></span><span class="tk-color">${esc(c)}</span>`;
-      } else if (m[4] != null) out += `<span class="tk-num">${esc(m[4])}${m[5] ? `<span class="tk-unit">${m[5]}</span>` : ''}</span>`;
-      else if (m[6]) out += `<span class="tk-fn">${esc(m[6])}</span>`;
-      else out += esc(m[7]);
+      } else if (m[5] != null) out += `<span class="tk-num">${esc(m[5])}${m[6] ? `<span class="tk-unit">${m[6]}</span>` : ''}</span>`;
+      else if (m[7]) out += `<span class="tk-fn">${esc(m[7])}</span>`;
+      else out += esc(m[8]);
     }
     return out;
   }
@@ -2153,8 +2607,11 @@ window.Folio = window.Folio || {};
       const n = P();
       if (!n) return;
       const txt = cssFor(n);
-      if (txt === last) return;
-      last = txt;
+      // brand colours feed the swatches next to var() tokens, so they are part of the cache key
+      const b = brand();
+      const key = txt + (b && txt.indexOf('var(--color-') >= 0 ? JSON.stringify(b.colors) : '');
+      if (key === last) return;
+      last = key;
       pre.innerHTML = highlightCss(txt);
     });
     const copy = h('button', { type: 'button', class: 'f-btn f-btn--ghost ins-copy', title: 'Copy CSS' }, icon('copy'), h('span', {}, 'Copy'));
@@ -2200,7 +2657,7 @@ window.Folio = window.Folio || {};
   function structureKey() {
     const ids = selIds();
     const uiKey = [ui.expandedFill, ui.padSides, ui.customFont, ui.meshPresets].join('|');
-    if (!ids.length) return 'none|' + uiKey;
+    if (!ids.length) return 'none|' + uiKey + '|' + brandKey();
     const p = store.get(ids[ids.length - 1]);
     const parent = store.getParent(p.id);
     const st = p.style || {};
@@ -2211,9 +2668,11 @@ window.Folio = window.Folio || {};
       p.layout ? p.layout.mode : '',
       (st.fills || []).map((f) => f.type + ':' + (f.stops ? f.stops.length : '') + ':' + (f.points ? f.points.length : '') + ':' + (f.type === 'image' ? !!f.src : '')).join(','),
       (st.shadows || []).length,
-      Array.isArray(st.radius),
+      Array.isArray(st.radius) ? 'arr' : typeof st.radius,
       p.text ? p.text.font + ':' + p.text.weight : '',
+      p.type === 'image' && p.image ? String(p.image.src || '').startsWith('brand-logo:') : '',
       uiKey,
+      brandKey(),
     ];
     return parts.join('|');
   }
@@ -2242,6 +2701,7 @@ window.Folio = window.Folio || {};
       if (!p || !ui.expandedFill || !ui.expandedFill.startsWith(p.id + ':')) ui.expandedFill = null;
     }
 
+    closePopover();
     bindings = [];
     const frag = document.createDocumentFragment();
     const ids = selIds();
@@ -2293,11 +2753,27 @@ window.Folio = window.Folio || {};
     });
   }
 
+  /** True while the person is typing in one of this panel's text fields. */
+  function typingHere() {
+    const ae = document.activeElement;
+    return !!ae && root.contains(ae) && (ae.tagName === 'TEXTAREA' || (ae.tagName === 'INPUT' && ae.type !== 'color'));
+  }
+
   function run() {
     rafId = 0;
     if (!root) return;
-    if (structureKey() !== lastKey) rebuild();
-    else updateBindings();
+    const key = structureKey();
+    if (key !== lastKey) {
+      // a brand edit made elsewhere (brand panel) must never rebuild under a focused field here:
+      // update values in place and rebuild once the field loses focus
+      const sameButBrand = key.slice(0, key.lastIndexOf('|')) === lastKey.slice(0, lastKey.lastIndexOf('|'));
+      if (sameButBrand && typingHere()) {
+        updateBindings();
+        return;
+      }
+      rebuild();
+    } else updateBindings();
+    if (pop && !pop.anchor.isConnected) closePopover();
   }
 
   function schedule() {
@@ -2308,7 +2784,9 @@ window.Folio = window.Folio || {};
     root = document.getElementById('inspector');
     if (!root) return;
     root.classList.add('ins');
-    ['change', 'selection', 'doc', 'history'].forEach((e) => store.on(e, schedule));
+    ['change', 'selection', 'doc', 'history', 'brand'].forEach((e) => store.on(e, schedule));
+    // a rebuild deferred while typing happens as soon as focus leaves the field
+    root.addEventListener('focusout', () => setTimeout(schedule, 0));
     rebuild();
   }
 
@@ -2320,5 +2798,5 @@ window.Folio = window.Folio || {};
     rebuild();
   }
 
-  Folio.inspector = { init, refresh, util: { parseColor, evalNum, splitColor, joinColor }, meshPresets: MESH_PRESETS };
+  Folio.inspector = { init, refresh, util: { parseColor, evalNum, splitColor, joinColor, resolveColor, tokenOf }, meshPresets: MESH_PRESETS };
 })();

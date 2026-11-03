@@ -45,7 +45,7 @@ const CONNECT_WAIT_MS = 25 * 1000;
 const BROWSER_OPEN_INTERVAL_MS = 60 * 1000;
 const HEARTBEAT_MS = 15 * 1000;
 const MAX_BODY_BYTES = 40 * 1024 * 1024; // screenshots can be a few MB of base64
-const READ_ONLY_TOOLS = new Set(['get_document', 'get_tree', 'screenshot']);
+const READ_ONLY_TOOLS = new Set(['get_document', 'get_tree', 'screenshot', 'get_brand']);
 const NO_BROWSER = /^(1|true|yes)$/i.test(process.env.FOLIO_NO_BROWSER || '');
 
 function log(...args) {

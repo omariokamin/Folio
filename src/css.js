@@ -81,10 +81,12 @@ window.Folio = window.Folio || {};
             break;
           }
           case 'image': {
-            if (!f.src) break;
+            // brand logos (`brand-logo:<id>`) resolve to the logo's real src
+            const src = String(f.src || '').startsWith('brand-logo:') ? (Folio.brand && Folio.brand.resolveSrc ? Folio.brand.resolveSrc(f.src) : '') : f.src;
+            if (!src) break;
             const fit = f.fit || 'cover';
             const size = fit === 'fill' ? '100% 100%' : fit === 'tile' ? 'auto' : fit;
-            push(`url("${f.src}")`, size, 'center', fit === 'tile' ? 'repeat' : 'no-repeat');
+            push(`url("${String(src).replace(/"/g, '%22')}")`, size, 'center', fit === 'tile' ? 'repeat' : 'no-repeat');
             break;
           }
           case 'noise':

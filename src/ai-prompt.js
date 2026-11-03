@@ -236,7 +236,7 @@ Text defaults: Inter 16px, weight 400, lineHeight 1.4, color #111111, left align
 
 ## Colours
 
-Write colours as hex: #rrggbb, or #rrggbbaa for transparency (#ffffff26 is white at 15% opacity, #00000000 is fully transparent).
+Write colours as hex: #rrggbb, or #rrggbbaa for transparency (#ffffff26 is white at 15% opacity, #00000000 is fully transparent). When a brand kit is active, link brand colours with tokens instead (see Brand kits).
 
 ## Fonts
 
@@ -246,7 +246,7 @@ Prefer these. Other Google Fonts family names usually work too, but they are not
 
 ## Images
 
-There is no stock photo library or image search. Real images only exist if the user gives you a URL or has already placed one, so never invent image URLs or use placeholder services. Build visuals from what CSS does well instead: mesh and linear gradients with noise, soft blurred ellipses, glass cards, bold typography, and mock UI made of frames (cards, bar charts from thin frames, avatar circles with initials, toggles, progress bars).
+There is no stock photo library or image search. Real images only exist if the user gives you a URL or has already placed one, so never invent image URLs or use placeholder services. The active brand kit's logos are the exception: show them with "brand-logo:<id>" (see Brand kits). Build visuals from what CSS does well instead: mesh and linear gradients with noise, soft blurred ellipses, glass cards, bold typography, and mock UI made of frames (cards, bar charts from thin frames, avatar circles with initials, toggles, progress bars).
 
 # Designing well
 
@@ -269,10 +269,44 @@ There is no stock photo library or image search. Real images only exist if the u
 - Social: Instagram post 1080×1080, Instagram portrait 1080×1350, story/reel 1080×1920, Facebook/link ad 1200×628, LinkedIn banner 1584×396, X/Twitter post 1600×900, YouTube thumbnail 1280×720.
 - Social formats are fixed size with clip on, have 64–96px margins, few words, one message and very big type.
 
+# Brand kits
+
+A brand kit holds a brand's colours, fonts, corner radii, logos, voice and style rules. A document has at most one active kit: get_document and the context at the start of the user's message summarise it, and get_brand shows all of it.
+
+Layers link to the active kit with tokens, written where the literal value would go:
+- Colour: "var(--color-<id>)" in any colour field (solid fills, gradient stops, mesh base and points, text colour, border, shadow), e.g. {"type": "solid", "color": "var(--color-primary)"}.
+- Font: "font": "var(--font-heading)" or "var(--font-body)". Text with a font token gets that font's weight from the kit unless you set one.
+- Corner radius: "radius": "var(--radius-sm)", "var(--radius-md)" or "var(--radius-lg)", as a single value (not inside a per-corner array).
+- Logo: an image node with "image": {"src": "brand-logo:<logoId>", "fit": "contain"} (an image fill may use the same src). Give it a width or a height; the other side follows the logo's proportions.
+
+Linked layers update by themselves when the kit is edited or the document switches to another kit, so links are what keep a design on-brand. Tools return tokens as they are stored, so you can see what is linked.
+
+Core colours always exist: primary (main brand colour: buttons, links, highlights), secondary (supporting colour: dark sections, headings), accent (small pops: badges, details), background (page and artboard background), surface (cards and panels on the background), text (main text), muted (secondary text, captions, borders). Kits can add custom colours (ids like c_ab12) and fonts (ids like f_ab12). Core fonts: heading (headlines and titles) and body (paragraphs, buttons and UI text).
+
+When a kit is active:
+- Use tokens for every colour, font and radius that has a brand role instead of typing its hex value or family name: the artboard fill is var(--color-background), main buttons var(--color-primary), body copy var(--color-text), captions var(--color-muted), headlines var(--font-heading). Literal values are fine for neutrals with no brand role (white text on a dark photo, a black overlay) and for translucent tints, which tokens cannot express: write the brand hex with an alpha suffix (primary #c2410c at 15% is #c2410c26), knowing it will not follow brand edits. Results warn when a literal equals a brand value you could have linked.
+- Stay inside the kit's palette and fonts; don't bring in unrelated colours or families.
+- Put the brand's logo on designs that represent the brand (posts, ads, headers, footers) when the kit has one, choosing the variant that suits the background (names usually say "on light" or "on dark"). If it has none, set the brand name in the heading font instead.
+- Write copy in the brand's voice: match its tone, use the tagline where it fits, prefer its words to use and never use its words to avoid. Sample copy shows its rhythm.
+- Follow the style rules:
+  - button: pill = radius 9999; rounded = var(--radius-md); square = radius 0. Cards and panels use var(--radius-lg); chips, tags and inputs var(--radius-sm).
+  - density: compact = a tighter scale (gaps 8–16, section padding 48–64); comfortable = the spacing scale under Designing well; airy = generous (gaps 24–48, section padding 128–160, more empty space).
+  - shadow: none = no shadows (separate with borders or the surface colour); soft = low, wide shadows (y 8–16, blur 24–48, alpha 10–15%); bold = strong shadows (y 16–24, blur 32–48, alpha 25–40%) or a hard offset shadow with blur 0.
+  - gradients: the kit's gradient presets (get_brand lists their fills) are its approved gradients; copy them into hero backgrounds and visuals rather than inventing new ones.
+
+When no kit is active, design freely. If the user describes their brand (colours, fonts, a logo URL, how they talk), or likes a look you made, offer to save it as a brand kit so future designs match.
+
+Creating and editing kits with set_brand:
+- New kit: {"create": true, "patch": {"name": "Crumb Bakery", "colors": {"primary": "#c2410c", "secondary": "#431407", "accent": "#f59e0b", "background": "#fff7ed", "surface": "#ffedd5", "text": "#1c1917", "muted": "#78716c"}, "fonts": {"heading": {"family": "Fraunces", "weight": 700}, "body": "DM Sans"}, "voice": {"tagline": "…", "tone": ["warm", "playful"], "useWords": "fresh, handmade", "avoidWords": "cheap"}, "style": {"button": "pill", "density": "airy", "shadow": "soft"}}}. It becomes the document's brand unless "activate" is false. Set all seven core colours, with strong contrast between text and background/surface.
+- Edit the active kit (or brand_id) by sending only what changes: {"patch": {"colors": [{"id": "primary", "value": "#9a3412"}]}}. Colours and fonts merge by id: entries you leave out stay; an entry without a known id becomes a custom colour or font (its generated id is returned); {"id": "c_ab12", "delete": true} removes a custom one (core ones can't be removed). voice and style merge field by field; style.gradients replaces the whole list.
+- Logos: you can only add one from an https:// image URL the user gave you ({"name": "Logo on light", "src": "https://…"}). You cannot upload files or send data: URLs; ask the user to upload logos in the Brand panel.
+- Switch the document to a library kit: {"brand_id": "b_…", "activate": true, "patch": {}}.
+- Editing the active kit restyles every linked layer at once (changing primary recolours the whole design) and is part of the same undo step as your other changes.
+
 # Workflow
 
-1. Look first. The user's message starts with a short description of the document and selection; call get_document for the full outline and get_tree before editing something you haven't seen.
-2. Plan briefly in your head: format and size, a palette of 3–5 colours, fonts, and the list of sections. Don't write a long plan for the user.
+1. Look first. The user's message starts with a short description of the document and selection; call get_document for the full outline (it includes the active brand kit) and get_tree before editing something you haven't seen.
+2. Plan briefly in your head: format and size, a palette of 3–5 colours and fonts (the brand kit's tokens when one is active), and the list of sections. Don't write a long plan for the user.
 3. Build in sections. Create the artboard first (create_nodes with parent_id null), then add one create_nodes call per major section (nav, hero, features, pricing, footer…) with the artboard's id as parent_id. The user watches the design come together and each call stays manageable. Small designs such as a social post can be created in one call.
 4. Check your work. Take a screenshot of the artboard (or of one section for detail) and look at it critically: overflowing, clipped or badly wrapped text, cramped or uneven spacing, weak contrast, misalignment, empty-looking areas. get_tree shows the real rendered sizes.
 5. Fix what you found with update_nodes (or move_nodes / delete_nodes). One or two rounds of screenshot and fixes is usually enough.
@@ -315,7 +349,7 @@ ${JSON.stringify(EXAMPLE)}`;
     {
       name: 'get_document',
       description:
-        'Outline of the whole document: its name, every artboard (id, name, position, size, layout and its direct children) and the current selection. Call this first to orient yourself.',
+        'Outline of the whole document: its name, every artboard (id, name, position, size, layout and its direct children), the current selection and a summary of the active brand kit. Call this first to orient yourself.',
       input_schema: { type: 'object', properties: {}, additionalProperties: false },
     },
     {
@@ -335,7 +369,7 @@ ${JSON.stringify(EXAMPLE)}`;
     {
       name: 'create_nodes',
       description:
-        'Create one or more layer trees. With parent_id null each tree becomes a new top-level artboard (placed automatically to the right of the existing artboards unless you give x/y). With a frame id, the trees are inserted into that frame (at index, or appended). Use one call per major section of a design. Returns the new ids mapped to their layer paths, plus warnings about anything that was corrected.',
+        'Create one or more layer trees. With parent_id null each tree becomes a new top-level artboard (placed automatically to the right of the existing artboards unless you give x/y). With a frame id, the trees are inserted into that frame (at index, or appended). Use one call per major section of a design. When a brand kit is active, link brand colours, fonts and radii with tokens (var(--color-primary), var(--font-heading), var(--radius-md)) and show logos with image src "brand-logo:<id>". Returns the new ids mapped to their layer paths, plus warnings about anything that was corrected.',
       input_schema: {
         type: 'object',
         properties: {
@@ -353,7 +387,7 @@ ${JSON.stringify(EXAMPLE)}`;
     {
       name: 'update_nodes',
       description:
-        'Change existing layers. Each patch uses the node schema and deep-merges into the layer: nested objects merge (e.g. {"text": {"size": 64}} keeps the other text settings) while arrays (fills, shadows, padding, stops, points, radius arrays) are replaced entirely. Setting width/height makes that axis fixed unless the patch also sets sizing. Ids, type and children cannot be patched (use create_nodes / move_nodes / delete_nodes).',
+        'Change existing layers. Each patch uses the node schema and deep-merges into the layer: nested objects merge (e.g. {"text": {"size": 64}} keeps the other text settings) while arrays (fills, shadows, padding, stops, points, radius arrays) are replaced entirely. Setting width/height makes that axis fixed unless the patch also sets sizing. Ids, type and children cannot be patched (use create_nodes / move_nodes / delete_nodes). Values may be brand tokens (var(--color-<id>), var(--font-<id>), var(--radius-sm|md|lg), "brand-logo:<id>"); writing a literal value unlinks that property from the brand kit.',
       input_schema: {
         type: 'object',
         properties: {
@@ -427,6 +461,65 @@ ${JSON.stringify(EXAMPLE)}`;
         additionalProperties: false,
       },
     },
+    {
+      name: 'get_brand',
+      description:
+        'The brand kit in full: the document\'s active kit (or the library kit brand_id) with every colour (id, name, value, token), font (id, family, weight, token), radius (sm/md/lg), logo (id, name, size; show it with image src "brand-logo:<id>"), voice (tagline, description, audience, tone, words to use and avoid, sample copy) and style rules (button shape, density, shadow strength, gradient presets), plus the kits in the library (and starter templates when none is active). Call it before designing for a brand and before set_brand.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          brand_id: { type: 'string', description: 'A library kit id (b_…). Omit for the active kit.' },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'set_brand',
+      description:
+        'Create a brand kit or edit one. With "create": true a new kit is made from patch (optionally starting from a template) and becomes the document\'s brand unless "activate" is false. Otherwise patch edits the active kit (or brand_id): colours and fonts merge by id (entries without a known id are added as custom ones, {"id": …, "delete": true} removes a custom one, core ids cannot be removed), voice and style merge field by field. Logos can only be added from an https:// image URL. Every layer linked to a changed token updates at once. Returns the kit\'s tokens and what changed.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          brand_id: { type: 'string', description: 'Kit to edit or activate (b_…). Omit to edit the active kit.' },
+          create: { type: 'boolean', description: 'Make a new kit from patch instead of editing one.' },
+          activate: { type: 'boolean', description: 'Make the kit the document\'s brand. Default true when creating, false when editing.' },
+          template: { type: 'string', description: 'With create: a starter template id or name to start from (get_brand lists them when no kit is active).' },
+          patch: {
+            type: 'object',
+            description: 'The fields to set. Send only what changes.',
+            properties: {
+              name: { type: 'string' },
+              colors: {
+                type: ['array', 'object'],
+                description: 'Array of {id?, name?, value?, delete?}, or a map {"primary": "#c2410c", …}. Values are literal colours. Core ids: primary, secondary, accent, background, surface, text, muted.',
+                items: { type: 'object' },
+              },
+              fonts: {
+                type: ['array', 'object'],
+                description: 'Array of {id?, name?, family?, weight?, delete?}, or a map {"heading": {"family": "Fraunces", "weight": 700}, "body": "DM Sans"}. Core ids: heading, body.',
+                items: { type: 'object' },
+              },
+              logos: {
+                type: 'array',
+                description: 'Add {name, src: "https://…"}, rename {id, name} or remove {id, delete: true}. data: URLs are refused.',
+                items: { type: 'object' },
+              },
+              voice: {
+                type: 'object',
+                description: 'tagline, description, audience, sampleCopy (text); tone (list of words); useWords, avoidWords (comma-separated text).',
+              },
+              style: {
+                type: 'object',
+                description: 'radius {sm, md, lg} in px; button "pill" | "rounded" | "square"; density "compact" | "comfortable" | "airy"; shadow "none" | "soft" | "bold"; gradients [{name, fill}] (Folio gradient fills; replaces the list).',
+              },
+            },
+            additionalProperties: false,
+          },
+        },
+        required: ['patch'],
+        additionalProperties: false,
+      },
+    },
   ];
 
   // ---------- per-message context (uses the store only when called) ----------
@@ -446,6 +539,15 @@ ${JSON.stringify(EXAMPLE)}`;
     const doc = store.doc;
     const lines = [];
     lines.push(`Document: ${q(doc.name || 'Untitled')}`);
+    const T0 = Folio.aiTools;
+    if (T0 && T0.brandContext) {
+      try {
+        const b = T0.brandContext();
+        if (b) lines.push(b);
+      } catch (e) {
+        /* context is best-effort */
+      }
+    }
     const roots = (doc.roots || []).map((id) => store.get(id)).filter(Boolean);
     if (!roots.length) lines.push('Artboards: none yet (the canvas is empty).');
     else {

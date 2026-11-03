@@ -90,8 +90,47 @@ The full step-by-step guide, including troubleshooting, is in
   updating live as you design.
 - **Export:** PNG at 1x / 2x / 3x, a complete standalone `.html` page, or copy the HTML + CSS.
 - **Undo / redo**, copy / paste, duplicate, autosave, and save/open `.folio.json` files.
+- **Brand kits:** keep each client's colours, fonts, logos, tone of voice and style in one place.
+  Layers link to the brand, so changing a brand colour updates every design at once, and
+  switching brands re-skins the whole document. Four starter kits included.
 - A **demo document** (landing page, Instagram post, mobile app screen) to explore. Load it
   again any time with **File → Load demo**.
+
+---
+
+## Brand kit
+
+Working for several brands? Give each one a **brand kit**: its colours, fonts, logos, tone of
+voice and a few style rules. Open the **Brand** tab at the top of the left panel.
+
+**Start one.** Pick a starter template (Folio Violet for tech, Crumb Bakery for food, Northwind
+for corporate, Neon Club for events), start blank, or import a `.brand.json` file. You can also
+ask Claude: in Claude Code or the ✦ AI tab, say *"Create a brand kit for my bakery"*.
+
+**Use it on your designs.** Select layers on the canvas, then in the Brand tab:
+
+- click a **colour swatch** to apply it (frames get it as their fill, text as its colour;
+  hold `⌥`/`Alt` while clicking to use it as a border instead),
+- click **"Aa"** next to a font to use it on the selected text (select a frame to change all
+  the text inside it),
+- click a **logo** to place it inside the selected frame,
+- click a **corner style** or a **gradient** to apply it to the selected frames.
+
+**Linked, not copied.** Applied brand values stay connected to the brand (they are real CSS
+variables such as `var(--color-primary)`, and exported code includes them). Change the Primary
+colour and every layer that uses it changes too. Switch the document to another brand from the
+menu at the top of the Brand tab and the whole design re-skins in one click. Deleting a custom
+colour, font or logo keeps the layers looking the same; they just stop being linked.
+
+**Where brands live.** Your brand library is saved in this browser. Each document also carries
+a copy of the brand it uses, so a saved `.folio.json` file opens with its brand anywhere, and
+undo/redo covers brand edits too. To move brands to another computer, use **⋯ → Export .json**
+and **Import .json**. Logos are resized to at most 1024 px and must be under 1.5 MB (SVG logos
+are kept as they are). If the browser's storage fills up, Folio tells you; export your brands
+and remove large logos.
+
+The **Voice** section (tagline, audience, tone, words to use and avoid, sample copy) is there
+for writing: Claude reads it when it writes copy for that brand.
 
 ---
 

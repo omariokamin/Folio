@@ -66,6 +66,8 @@ window.Folio = window.Folio || {};
     delete_nodes: 'Deleting layers',
     move_nodes: 'Moving layers',
     screenshot: 'Taking a screenshot',
+    get_brand: 'Reading the brand kit',
+    set_brand: 'Updating the brand kit',
   };
 
   const store = Folio.store;

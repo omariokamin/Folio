@@ -111,6 +111,21 @@ Keep the conversation going in the Terminal: "make the headline bigger", "try a 
 removes the last thing Claude did. You can also just tell Claude ("undo that", "go back to the
 previous colours").
 
+**Brand kits.** Folio can remember your brand (colours, fonts, logos, the way you talk) as a
+**brand kit**, and Claude then designs with it automatically.
+
+- *Make one by asking*: "Create a brand kit for my bakery: terracotta and cream, a friendly serif for
+  headlines, warm and playful tone." Claude sets it up and makes it this document's brand. You can
+  also create and edit kits yourself in the **Brand** tab on the right of the Folio window.
+- *Designs stay linked to the kit.* Claude uses the kit's colours, fonts and corner sizes as links,
+  not copies. Change a colour in the kit (or ask Claude: "make our main colour a deeper red") and
+  every layer that uses it updates at once. Switching the document to another kit re-styles it.
+- *Logos*: upload your logo files in the Brand tab and Claude will place them on your designs. Claude
+  can't upload files itself; it can only add a logo from a web link (`https://…`) you give it.
+- Kit changes are undone with `⌘Z` like everything else. Kits are saved in the browser, and the
+  `localhost:4317` tab has its own list, so use **Export .json** / **Import .json** in the Brand tab
+  to move a kit between browsers or computers.
+
 **Your work is saved in the browser.** Folio autosaves in the browser tab at `localhost:4317`.
 That copy is separate from the one you get by double-clicking `index.html`, so use
 **File → Save to file** to keep a `.folio.json` file you can open anywhere.

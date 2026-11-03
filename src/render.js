@@ -7,6 +7,7 @@
  *   Folio.render.sync()          flush a pending render right now (no-op when up to date)
  *   Folio.render.layoutBox(id)   world-space, *unrotated* layout box {x,y,width,height,rotation}
  *   Folio.render.bounds(id)      world-space axis-aligned bounding box (includes rotation)
+ *   Folio.render.resolveSrc(src) `brand-logo:<id>` -> the brand logo's src (other srcs unchanged)
  *
  * It is a small keyed reconciler: one element per node (data-id), styled with
  * exactly the CSS produced by Folio.css.nodeStyles — what you see is the code.
@@ -45,6 +46,12 @@ window.Folio = window.Folio || {};
     });
     store.on('viewport', () => {
       vpDirty = true;
+      schedule();
+    });
+    // brand kit edits (logo replaced, font family changed, …): colours/radii update through the
+    // CSS variables on #canvas-world, but logo srcs and web fonts need a fresh pass
+    store.on('brand', () => {
+      docDirty = true;
       schedule();
     });
     rerender();
@@ -168,7 +175,7 @@ window.Folio = window.Folio || {};
         if (el.textContent !== content || el.childNodes.length > 1) el.textContent = content;
       }
     } else if (node.type === 'image') {
-      const src = (node.image && node.image.src) || PLACEHOLDER;
+      const src = resolveSrc(node.image && node.image.src) || PLACEHOLDER;
       if (lastSrc.get(el) !== src) {
         el.src = src;
         lastSrc.set(el, src);
@@ -177,6 +184,14 @@ window.Folio = window.Folio || {};
       // a frame never holds text directly
       Array.from(el.childNodes).forEach((c) => c.nodeType === 3 && c.remove());
     }
+  }
+
+  /** `brand-logo:<id>` -> the logo's data URL / URL (empty when the logo is gone). */
+  function resolveSrc(src) {
+    if (src && typeof src === 'string' && src.startsWith('brand-logo:')) {
+      return Folio.brand && Folio.brand.resolveSrc ? Folio.brand.resolveSrc(src) || '' : '';
+    }
+    return src;
   }
 
   // ---------- geometry (world space) ----------
@@ -219,5 +234,5 @@ window.Folio = window.Folio || {};
     return { x: cx - w / 2, y: cy - h / 2, width: w, height: h, rotation: rot };
   }
 
-  Folio.render = { init, el, rerender, sync, schedule, bounds, layoutBox, PLACEHOLDER };
+  Folio.render = { init, el, rerender, sync, schedule, bounds, layoutBox, resolveSrc, PLACEHOLDER };
 })();

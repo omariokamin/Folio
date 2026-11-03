@@ -61,6 +61,7 @@ window.Folio = window.Folio || {};
     const ctx = {
       mode, // 'create' | 'update'
       at: '',
+      literals: new Map(), // literal colours/fonts that equal a brand value (hint only)
       warn(msg) {
         const m = (ctx.at ? ctx.at + ': ' : '') + msg;
         if (seen.has(m)) return;
@@ -208,14 +209,258 @@ window.Folio = window.Folio || {};
     return parseFunctional(s);
   }
   function color(v, ctx, label) {
+    const t = colorToken(v, ctx, label);
+    if (t) return t.value;
     const c = normalizeColor(v);
-    if (c) return c;
+    if (c) {
+      noteLiteralColor(c, ctx);
+      return c;
+    }
     ctx.warn(`${label} ${str(v)} is not a valid colour — ${ctx.mode === 'update' ? 'kept the previous colour' : 'used the default'}`);
     return undefined;
   }
 
+  // ---------- brand kits: token references ----------
+  // Layers link to the active brand with plain CSS strings: var(--color-<id>), var(--font-<id>),
+  // var(--radius-sm|md|lg) and image src "brand-logo:<logoId>". They are stored (and shown to the
+  // model) as tokens; Folio.brand turns them into CSS variables on the canvas.
+  const CORE_COLORS = [
+    ['primary', 'Primary', '#2563eb'],
+    ['secondary', 'Secondary', '#0f172a'],
+    ['accent', 'Accent', '#f59e0b'],
+    ['background', 'Background', '#ffffff'],
+    ['surface', 'Surface', '#f4f4f5'],
+    ['text', 'Text', '#18181b'],
+    ['muted', 'Muted', '#71717a'],
+  ];
+  const CORE_COLOR_IDS = CORE_COLORS.map((c) => c[0]);
+  const CORE_FONTS = [
+    ['heading', 'Heading', 'Inter', 700],
+    ['body', 'Body', 'Inter', 400],
+  ];
+  const CORE_FONT_IDS = CORE_FONTS.map((f) => f[0]);
+  const RADIUS_IDS = ['sm', 'md', 'lg'];
+  const RADIUS_DEFAULTS = { sm: 6, md: 12, lg: 24 };
+  const COLOR_ALIASES = { brand: 'primary', main: 'primary', cta: 'primary', action: 'primary', second: 'secondary', highlight: 'accent', pop: 'accent', bg: 'background', page: 'background', canvas: 'background', paper: 'background', card: 'surface', panel: 'surface', elevated: 'surface', foreground: 'text', fg: 'text', ink: 'text', body: 'text', heading: 'text', subtle: 'muted', grey: 'muted', gray: 'muted', caption: 'muted', border: 'muted' };
+  const FONT_ALIASES = { display: 'heading', headline: 'heading', headings: 'heading', title: 'heading', h1: 'heading', header: 'heading', primary: 'heading', text: 'body', paragraph: 'body', copy: 'body', base: 'body', secondary: 'body', ui: 'body' };
+  const RADIUS_ALIASES = { s: 'sm', small: 'sm', xs: 'sm', xsmall: 'sm', m: 'md', medium: 'md', base: 'md', default: 'md', l: 'lg', large: 'lg', xl: 'lg', '2xl': 'lg', xxl: 'lg' };
+
+  let brandScope; // undefined = the document's active brand; set_brand validates gradients against the kit it edits
+  function activeBrand() {
+    if (brandScope !== undefined) return brandScope;
+    try {
+      return (Folio.brand && Folio.brand.active && Folio.brand.active()) || null;
+    } catch (e) {
+      return null;
+    }
+  }
+  const keyOf = (s) => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]/g, '');
+  const listOf = (b, k) => (b && Array.isArray(b[k]) ? b[k].filter(isObj) : []);
+  const tokenFor = (kind, id) => (kind === 'logo' ? `brand-logo:${id}` : `var(--${kind}-${id})`);
+
+  /** 'var(--color-primary)' → {kind:'color', id:'primary'}; 'var(--accent)' → {kind:null, id:'accent'}; otherwise null. */
+  function parseVar(v) {
+    if (typeof v !== 'string') return null;
+    const s = v.trim();
+    const m = /^var\(\s*--([A-Za-z0-9_-]+)\s*(?:,[\s\S]*)?\)$/.exec(s) || /^--([A-Za-z0-9_-]+)$/.exec(s);
+    if (!m) return null;
+    const k = /^(colou?r|font|radius)-(.+)$/i.exec(m[1]);
+    if (!k) return { kind: null, id: m[1], raw: s };
+    return { kind: /^colou?r$/i.test(k[1]) ? 'color' : k[1].toLowerCase(), id: k[2], raw: s };
+  }
+
+  /** Find a brand entry by id, then forgivingly by name / alias / typo. */
+  function nearestEntry(list, id, aliases) {
+    const exact = list.find((e) => e.id === id);
+    if (exact) return { entry: exact, exact: true };
+    const tries = [keyOf(id)];
+    if (/^brand./.test(tries[0])) tries.push(tries[0].replace(/^brand/, ''));
+    for (const k of tries) {
+      if (!k) continue;
+      let e = list.find((x) => keyOf(x.id) === k) || list.find((x) => keyOf(x.name) === k);
+      if (!e && aliases && own(aliases, k)) e = list.find((x) => x.id === aliases[k]);
+      if (!e && aliases && k.length > 3) {
+        const a = Object.keys(aliases).find((x) => x.length > 3 && editDistance(k, x) <= 1);
+        if (a) e = list.find((x) => x.id === aliases[a]);
+      }
+      if (!e && k.length > 2) e = list.find((x) => editDistance(k, keyOf(x.id)) <= 1 || editDistance(k, keyOf(x.name)) <= 2);
+      if (!e && k.length > 3)
+        e = list.find((x) => {
+          const n = keyOf(x.name);
+          return n.length > 2 && (n.includes(k) || k.includes(n));
+        });
+      if (e) return { entry: e, exact: false };
+    }
+    return null;
+  }
+
+  const fallbackWord = (ctx) => (ctx.mode === 'update' ? 'kept the previous value' : 'used the default');
+  function validTokens(ctx, kind, b) {
+    const flag = 'listed_' + kind;
+    if (ctx[flag]) return ' (valid tokens are listed above)';
+    ctx[flag] = true;
+    if (kind === 'color') return '. Valid colour tokens: ' + listOf(b, 'colors').map((c) => `${tokenFor('color', c.id)} = ${c.name} ${c.value}`).join(', ');
+    if (kind === 'font') return '. Valid font tokens: ' + listOf(b, 'fonts').map((f) => `${tokenFor('font', f.id)} = ${f.family}`).join(', ');
+    if (kind === 'logo') {
+      const ls = listOf(b, 'logos');
+      return ls.length ? '. Valid logos: ' + ls.map((l) => `brand-logo:${l.id} (${q(l.name)})`).join(', ') : '. This kit has no logos yet (the user can upload one in the Brand panel)';
+    }
+    return '';
+  }
+
+  /** A colour token → {value: 'var(--color-id)' | undefined}; null when `v` is not a token. */
+  function colorToken(v, ctx, label) {
+    const t = parseVar(v);
+    if (!t) return null;
+    if (t.kind && t.kind !== 'color') {
+      ctx.warn(`${label} ${q(t.raw)} is a ${t.kind} token, not a colour — ${fallbackWord(ctx)}`);
+      return { value: undefined };
+    }
+    const b = activeBrand();
+    if (!b) {
+      ctx.warn(`${label} ${q(t.raw)}: no brand kit is active, so colour tokens have nothing to link to — ${fallbackWord(ctx)}. Use hex colours, or create a kit with set_brand first`);
+      return { value: undefined };
+    }
+    const hit = nearestEntry(listOf(b, 'colors'), t.id, COLOR_ALIASES);
+    if (hit) {
+      const tok = tokenFor('color', hit.entry.id);
+      if (!hit.exact || !t.kind) ctx.warn(`${label} ${q(t.raw)} is not a colour token of ${q(b.name)} — used ${tok} (${hit.entry.name} ${hit.entry.value})`);
+      return { value: tok };
+    }
+    ctx.warn(`${label} ${q(t.raw)} is not a colour in the brand kit ${q(b.name)} — ${fallbackWord(ctx)}${validTokens(ctx, 'color', b)}`);
+    return { value: undefined };
+  }
+
+  /** Remember literal colours that equal a brand colour, so the result can suggest linking them. */
+  function noteLiteralColor(c, ctx) {
+    if (brandScope !== undefined || !ctx.literals) return;
+    const hex = c.slice(0, 7);
+    if (c.length !== 7 || hex === '#ffffff' || hex === '#000000') return;
+    const b = activeBrand();
+    if (!b) return;
+    const hit = listOf(b, 'colors').find((x) => normalizeColor(x.value) === c);
+    if (hit) ctx.literals.set(c, tokenFor('color', hit.id));
+  }
+  function literalHint(ctx) {
+    if (!ctx.literals || !ctx.literals.size) return null;
+    const pairs = [...ctx.literals].slice(0, 6).map(([c, t]) => `${c} → ${t}`);
+    return `These literal values equal the brand's but are not linked, so they won't follow brand edits: ${pairs.join(', ')}. Prefer the tokens.`;
+  }
+
+  /** A font token → {value: 'var(--font-id)' | undefined}; null when `v` is not a token. */
+  function fontToken(v, ctx) {
+    const t = parseVar(v);
+    if (!t) return null;
+    if (t.kind && t.kind !== 'font') {
+      ctx.warn(`font ${q(t.raw)} is a ${t.kind} token, not a font — ${fallbackWord(ctx)}`);
+      return { value: undefined };
+    }
+    const b = activeBrand();
+    if (!b) {
+      ctx.warn(`font ${q(t.raw)}: no brand kit is active, so font tokens have nothing to link to — ${fallbackWord(ctx)}. Use a family name such as "Inter"`);
+      return { value: undefined };
+    }
+    const hit = nearestEntry(listOf(b, 'fonts'), t.id, FONT_ALIASES);
+    if (hit) {
+      const tok = tokenFor('font', hit.entry.id);
+      if (!hit.exact || !t.kind) ctx.warn(`font ${q(t.raw)} is not a font token of ${q(b.name)} — used ${tok} (${hit.entry.family})`);
+      return { value: tok };
+    }
+    ctx.warn(`font ${q(t.raw)} is not a font in the brand kit ${q(b.name)} — ${fallbackWord(ctx)}${validTokens(ctx, 'font', b)}`);
+    return { value: undefined };
+  }
+
+  /** The brand font entry behind a font token (or null). */
+  function brandFont(font) {
+    const t = parseVar(font);
+    if (!t || t.kind !== 'font') return null;
+    return listOf(activeBrand(), 'fonts').find((f) => f.id === t.id) || null;
+  }
+  /** Real family name for a font value (resolves brand tokens). */
+  function familyOf(font) {
+    if (typeof font !== 'string' || !/^var\(/.test(font)) return font;
+    const f = brandFont(font);
+    if (f && f.family) return f.family;
+    try {
+      if (Folio.brand && Folio.brand.resolveFont) return Folio.brand.resolveFont(font);
+    } catch (e) {
+      /* fall through */
+    }
+    return font;
+  }
+
+  function radiusOf(b, id) {
+    const r = b && isObj(b.style) && isObj(b.style.radius) ? b.style.radius : null;
+    const v = r ? Number(r[id]) : NaN;
+    return isFinite(v) ? v : RADIUS_DEFAULTS[id];
+  }
+  /** A radius token → {value: 'var(--radius-id)' | number | undefined}; null when `v` is not a token. */
+  function radiusToken(v, ctx, label, literal) {
+    const t = parseVar(v);
+    if (!t) return null;
+    if (t.kind && t.kind !== 'radius') {
+      ctx.warn(`${label} ${q(t.raw)} is a ${t.kind} token, not a radius — ignored`);
+      return { value: undefined };
+    }
+    const k = keyOf(t.id);
+    if (/^(full|pill|round|circle|max)$/.test(k)) {
+      ctx.warn(`${label} ${q(t.raw)} is not a brand radius (sm, md, lg) — used 9999 for a pill/circle`);
+      return { value: 9999 };
+    }
+    const id = RADIUS_IDS.includes(t.id) ? t.id : own(RADIUS_ALIASES, k) ? RADIUS_ALIASES[k] : null;
+    if (!id) {
+      ctx.warn(`${label} ${q(t.raw)} is not a radius token — valid ones are var(--radius-sm), var(--radius-md), var(--radius-lg); ignored`);
+      return { value: undefined };
+    }
+    const b = activeBrand();
+    if (!b) {
+      ctx.warn(`${label} ${q(t.raw)}: no brand kit is active — used ${RADIUS_DEFAULTS[id]}px`);
+      return { value: RADIUS_DEFAULTS[id] };
+    }
+    if (literal) {
+      ctx.warn(`${label}: per-corner radius arrays can't hold tokens — used ${radiusOf(b, id)}px from var(--radius-${id})`);
+      return { value: radiusOf(b, id) };
+    }
+    if (id !== t.id || !t.kind) ctx.warn(`${label} ${q(t.raw)} — used var(--radius-${id})`);
+    return { value: `var(--radius-${id})` };
+  }
+
+  /** 'brand-logo:<id>' → {value} | {value: undefined}; null when `v` is not a logo reference. */
+  function logoSrc(v, ctx, label) {
+    if (typeof v !== 'string') return null;
+    const m = /^brand-logo:\s*(.*)$/i.exec(v.trim());
+    if (!m) return null;
+    const b = activeBrand();
+    if (!b) {
+      ctx.warn(`${label} ${q(v)}: no brand kit is active, so there is no logo to show — ignored`);
+      return { value: undefined };
+    }
+    const logos = listOf(b, 'logos');
+    if (!logos.length) {
+      ctx.warn(`${label} ${q(v)}: the brand kit ${q(b.name)} has no logos yet (the user can upload one in the Brand panel) — ignored`);
+      return { value: undefined };
+    }
+    if (!m[1]) {
+      ctx.warn(`${label} ${q(v)} names no logo — used brand-logo:${logos[0].id} (${q(logos[0].name)})`);
+      return { value: tokenFor('logo', logos[0].id) };
+    }
+    const hit = nearestEntry(logos, m[1], null);
+    if (hit) {
+      if (!hit.exact) ctx.warn(`${label} ${q(v)} is not a logo of ${q(b.name)} — used brand-logo:${hit.entry.id} (${q(hit.entry.name)})`);
+      return { value: tokenFor('logo', hit.entry.id) };
+    }
+    ctx.warn(`${label} ${q(v)} is not a logo of ${q(b.name)} — ignored${validTokens(ctx, 'logo', b)}`);
+    return { value: undefined };
+  }
+  function logoOf(src) {
+    const m = typeof src === 'string' && /^brand-logo:(.+)$/.exec(src);
+    return m ? listOf(activeBrand(), 'logos').find((l) => l.id === m[1]) || null : null;
+  }
+
   // ---------- fonts ----------
   function normalizeFont(v, ctx) {
+    const tok = fontToken(v, ctx);
+    if (tok) return tok.value;
     if (typeof v !== 'string') {
       ctx.warn(`font ${str(v)} is not a font family name — ignored`);
       return undefined;
@@ -234,7 +479,10 @@ window.Folio = window.Folio || {};
     }
     const list = (Folio.fonts && Folio.fonts.list) || [];
     const known = list.find((f) => f.family.toLowerCase() === s.toLowerCase());
-    if (known) return known.family;
+    if (known) {
+      noteLiteralFont(known.family, ctx);
+      return known.family;
+    }
     const sys = SYSTEM_FONTS.find((f) => f.toLowerCase() === s.toLowerCase());
     if (sys) return sys;
     ctx.warn(`font ${q(s)} is not in Folio's font list — loading it from Google Fonts; if no such family exists the text falls back to a system font`);
@@ -246,7 +494,14 @@ window.Folio = window.Folio || {};
     return s;
   }
 
+  function noteLiteralFont(family, ctx) {
+    if (brandScope !== undefined || !ctx.literals) return;
+    const hit = listOf(activeBrand(), 'fonts').find((f) => f.family === family);
+    if (hit) ctx.literals.set(`font ${q(family)}`, tokenFor('font', hit.id));
+  }
+
   function snapWeight(font, weight, ctx) {
+    font = familyOf(font);
     if (!font || weight == null || !Folio.fonts || !Folio.fonts.weightsOf) return weight;
     const known = (Folio.fonts.list || []).some((f) => f.family === font);
     if (!known) return weight;
@@ -290,6 +545,8 @@ window.Folio = window.Folio || {};
       ctx.warn(`${label} must be an image URL`);
       return undefined;
     }
+    const logo = logoSrc(v, ctx, label);
+    if (logo) return logo.value;
     const s = v.trim();
     if (/^data:[^,]*,…\(/.test(s) || /…\(\d/.test(s)) return undefined; // a shortened data URL echoed back from get_tree
     if (/^(https?:|data:image\/|blob:)/i.test(s) || /^[\w.\-\/]+\.(png|jpe?g|gif|webp|svg|avif)$/i.test(s)) return s;
@@ -483,8 +740,13 @@ window.Folio = window.Folio || {};
   }
 
   function sanitizeRadius(v, ctx) {
+    const tok = radiusToken(v, ctx, 'radius');
+    if (tok) return tok.value;
     if (Array.isArray(v)) {
-      const a = v.slice(0, 4).map((x, i) => num(x, ctx, `radius[${i}]`, 0, 10000));
+      const a = v.slice(0, 4).map((x, i) => {
+        const t = radiusToken(x, ctx, `radius[${i}]`, true);
+        return t ? t.value : num(x, ctx, `radius[${i}]`, 0, 10000);
+      });
       if (a.some((x) => x == null) || !a.length) {
         ctx.warn('radius must be a number or [topLeft, topRight, bottomRight, bottomLeft] — ignored');
         return undefined;
@@ -1029,6 +1291,25 @@ window.Folio = window.Folio || {};
       const parentColumn = parentFlex && (parentClean ? parentClean.layout.direction !== 'row' : info.parentDir !== 'row');
       if (!raw.sizing && clean.width == null && parentColumn && String(t.content).length > 60 && !/\n/.test(t.content)) sizing.w = 'fill';
       if (t.font) info.fonts.add(t.font);
+      // a brand font token brings the kit's weight for that role unless the model chose one
+      const bf = brandFont(t.font);
+      if (bf && t.weight == null && Number(bf.weight) && Number(bf.weight) !== 400) t.weight = snapWeight(t.font, Number(bf.weight), ctx);
+    }
+    if (type === 'image' && clean.image && logoOf(clean.image.src)) {
+      // brand logos: keep their aspect ratio and show them whole
+      const logo = logoOf(clean.image.src);
+      const lw = Number(logo.width);
+      const lh = Number(logo.height);
+      if (lw > 0 && lh > 0) {
+        if (clean.width != null && clean.height == null) clean.height = Math.max(1, Math.round((clean.width * lh) / lw));
+        else if (clean.height != null && clean.width == null) clean.width = Math.max(1, Math.round((clean.height * lw) / lh));
+        else if (clean.width == null && clean.height == null) {
+          const k = Math.min(1, 240 / Math.max(lw, lh));
+          clean.width = Math.max(1, Math.round(lw * k));
+          clean.height = Math.max(1, Math.round(lh * k));
+        }
+      }
+      if (!clean.image.fit) clean.image.fit = 'contain';
     }
     clean.sizing = sizing;
     if (!clean.name) {
@@ -1451,6 +1732,9 @@ window.Folio = window.Folio || {};
       return { id: n.id, type: n.type, name: n.name, parent: p ? `${p.id} ${q(p.name)}` : null, artboard: store.rootOf(n.id) };
     });
     const out = { document: doc.name || 'Untitled', artboards, selection };
+    const brief = brandBrief();
+    out.brand = brief || null;
+    if (!brief && brandsAvailable()) out.brandNote = 'No brand kit is active: design freely, and offer to save the look as a kit with set_brand.';
     if (!artboards.length) out.note = 'The canvas is empty. Create an artboard with create_nodes (parent_id null).';
     return result(out, `Read the document (${artboards.length} artboard${artboards.length === 1 ? '' : 's'})`, []);
   }
@@ -1555,6 +1839,8 @@ window.Folio = window.Folio || {};
       return `${id} ${q(n.name)} at (${n.x}, ${n.y}) ${rs[0]}×${rs[1]}`;
     });
     const warnings = notes.concat(ctx.warnings());
+    const hint = literalHint(ctx);
+    if (hint) warnings.push(hint);
     if (warnings.length) out.warnings = warnings;
     const issues = layoutIssues(allIds);
     if (issues.length) out.layout = issues;
@@ -1660,6 +1946,8 @@ window.Folio = window.Folio || {};
     const out = { updated: changed.map((id) => `${id} ${q(store.get(id).name)}`) };
     if (errors.length) out.errors = errors;
     const warnings = notes.concat(ctx.warnings());
+    const hint = literalHint(ctx);
+    if (hint) warnings.push(hint);
     if (warnings.length) out.warnings = warnings;
     const touched = [];
     changed.forEach((id) => {
@@ -1820,9 +2108,10 @@ window.Folio = window.Folio || {};
     const want = new Set();
     [id, ...store.descendants(id)].forEach((nid) => {
       const n = store.get(nid);
-      if (n && n.type === 'text' && n.text && n.text.font && !SYSTEM_FONTS.includes(n.text.font)) {
-        Folio.fonts && Folio.fonts.ensure && Folio.fonts.ensure(n.text.font);
-        want.add(`${n.text.italic ? 'italic ' : ''}${n.text.weight || 400} 16px "${n.text.font}"`);
+      const fam = n && n.type === 'text' && n.text ? familyOf(n.text.font) : null;
+      if (fam && !/^var\(/.test(fam) && !SYSTEM_FONTS.includes(fam)) {
+        Folio.fonts && Folio.fonts.ensure && Folio.fonts.ensure(fam);
+        want.add(`${n.text.italic ? 'italic ' : ''}${n.text.weight || 400} 16px "${fam}"`);
       }
     });
     await timeout(Promise.all([...want].map((f) => document.fonts.load(f).catch(() => null))), 4000);
@@ -1877,6 +2166,781 @@ window.Folio = window.Folio || {};
     }
   }
 
+  // ---------- brand kit tools ----------
+  const BRAND_KEYS = ['name', 'colors', 'fonts', 'logos', 'voice', 'style'];
+  const BRAND_ALIASES = { colours: 'colors', palette: 'colors', typography: 'fonts', logo: 'logos', tone: 'voice' };
+  const BRAND_MAX_INPUT = 60000; // characters of JSON
+  const MAX_BRAND_COLORS = 40;
+  const MAX_BRAND_FONTS = 12;
+  const MAX_BRAND_LOGOS = 12;
+  const MAX_GRADIENTS = 12;
+  const UNAVAILABLE = 'Brand kits are not available in this build of Folio (src/brand.js is not loaded). Design with literal colours and fonts instead.';
+
+  const brandApi = () => (Folio.brand && typeof Folio.brand.active === 'function' ? Folio.brand : null);
+  const brandsAvailable = () => !!brandApi();
+  function safe(fn, d) {
+    try {
+      const v = fn();
+      return v === undefined ? d : v;
+    } catch (e) {
+      return d;
+    }
+  }
+  const clip = (s, n) => {
+    s = String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+    return s.length > n ? s.slice(0, n - 1) + '…' : s;
+  };
+  const clipText = (s, n) => String(s == null ? '' : s).replace(/\r/g, '').trim().slice(0, n);
+  const asList = (v) =>
+    Array.isArray(v)
+      ? v.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim())
+      : typeof v === 'string' && v.trim()
+      ? v.split(/[,\n;]+/).map((x) => x.trim()).filter(Boolean)
+      : [];
+  const cloneJson = (v) => JSON.parse(JSON.stringify(v));
+  const yes = (v) => v === true || v === 'true';
+
+  function library() {
+    const B = brandApi();
+    return B && B.library ? (safe(() => B.library(), []) || []).filter(isObj) : [];
+  }
+  /** A kit by id (or exact name); the document's copy wins for the active kit. */
+  function findBrand(id) {
+    const act = activeBrand();
+    const all = (act ? [act] : []).concat(library().filter((b) => !act || b.id !== act.id));
+    return all.find((b) => b.id === id) || all.find((b) => keyOf(b.name) === keyOf(id)) || null;
+  }
+  const libLine = (lib) => (lib.length ? lib.slice(0, 20).map((b) => `${b.id} ${q(b.name)}`).join(', ') : 'empty');
+
+  function voiceLine(v) {
+    if (!isObj(v)) return '';
+    const parts = [];
+    const tone = asList(v.tone);
+    if (tone.length) parts.push('tone ' + tone.slice(0, 5).join(', '));
+    if (v.tagline) parts.push('tagline ' + q(clip(v.tagline, 80)));
+    if (v.audience) parts.push('for ' + clip(v.audience, 60));
+    const use = asList(v.useWords);
+    if (use.length) parts.push('use: ' + use.slice(0, 8).join(', '));
+    const avoid = asList(v.avoidWords);
+    if (avoid.length) parts.push('avoid: ' + avoid.slice(0, 8).join(', '));
+    return clip(parts.join(' · '), 320);
+  }
+  function styleLine(st) {
+    if (!isObj(st)) st = {};
+    const parts = [`button ${st.button || 'rounded'}`, `density ${st.density || 'comfortable'}`, `shadow ${st.shadow || 'soft'}`];
+    const g = Array.isArray(st.gradients) ? st.gradients.filter(isObj) : [];
+    if (g.length) parts.push(`gradients ${g.slice(0, 6).map((x) => q(clip(x.name || 'Gradient', 30))).join(', ')}`);
+    return parts.join(' · ');
+  }
+  function logoLine(l) {
+    const sz = Number(l.width) > 0 && Number(l.height) > 0 ? ` ${Math.round(l.width)}×${Math.round(l.height)}` : '';
+    return `${tokenFor('logo', l.id)} ${q(clip(l.name, 40))}${sz}`;
+  }
+  function logoFormat(src) {
+    if (typeof src !== 'string') return 'unknown';
+    const m = /^data:image\/([a-z0-9.+-]+)/i.exec(src);
+    if (m) return m[1].toLowerCase().replace('svg+xml', 'svg').replace('jpeg', 'jpg');
+    return /^https?:/i.test(src) ? 'url' : 'unknown';
+  }
+
+  /** Compact one-glance summary of a kit (active kit by default); null when there is none. */
+  function brandBrief(b) {
+    if (b === undefined) b = activeBrand();
+    if (!isObj(b)) return null;
+    const o = {
+      id: b.id,
+      name: b.name,
+      colors: listOf(b, 'colors').map((c) => `${c.id}=${c.value}`).join(' '),
+      fonts: listOf(b, 'fonts').map((f) => `${f.id}=${f.family}${f.weight ? ' ' + f.weight : ''}`).join(', '),
+      radius: RADIUS_IDS.map((id) => `${id} ${radiusOf(b, id)}`).join(' / '),
+      logos: listOf(b, 'logos').map(logoLine),
+      style: styleLine(b.style),
+    };
+    const v = voiceLine(b.voice);
+    if (v) o.voice = v;
+    return o;
+  }
+
+  /** Lines for the per-message context (contextFor). Empty string when brand kits don't exist. */
+  function brandContext() {
+    if (!brandsAvailable()) return '';
+    const b = activeBrand();
+    if (!b) {
+      const lib = library();
+      return `Brand kit: none active${lib.length ? ` (library: ${lib.slice(0, 8).map((x) => q(x.name)).join(', ')})` : ''}. Design freely; offer to save the look as a kit with set_brand.`;
+    }
+    const x = brandBrief(b);
+    const lines = [
+      `Active brand kit: ${q(x.name)} (${x.id}). Link to it with tokens; get_brand shows the whole kit.`,
+      `- colours, var(--color-<id>): ${x.colors}`,
+      `- fonts, var(--font-<id>): ${x.fonts}; radius, var(--radius-<sm|md|lg>): ${x.radius}`,
+    ];
+    if (x.logos.length) lines.push(`- logos, image src: ${x.logos.join(', ')}`);
+    if (x.voice) lines.push(`- voice: ${x.voice}`);
+    lines.push(`- style: ${x.style}`);
+    return lines.join('\n');
+  }
+
+  function roleOf(id) {
+    const r = Folio.brand && Folio.brand.roles;
+    return (isObj(r) && typeof r[id] === 'string' && r[id]) || undefined;
+  }
+
+  function brandDetail(b, isActive) {
+    const v = isObj(b.voice) ? b.voice : {};
+    const st = isObj(b.style) ? b.style : {};
+    const voice = {};
+    ['tagline', 'description', 'audience', 'sampleCopy'].forEach((k) => v[k] && (voice[k] = clipText(v[k], 1500)));
+    ['tone', 'useWords', 'avoidWords'].forEach((k) => {
+      const l = asList(v[k]);
+      if (l.length) voice[k] = l.slice(0, 40);
+    });
+    return {
+      id: b.id,
+      name: b.name,
+      active: !!isActive,
+      colors: listOf(b, 'colors').map((c) => Object.assign({ id: c.id, name: c.name, value: c.value, token: tokenFor('color', c.id) }, CORE_COLOR_IDS.includes(c.id) ? { core: true, role: roleOf(c.id) } : {})),
+      fonts: listOf(b, 'fonts').map((f) => Object.assign({ id: f.id, name: f.name, family: f.family, weight: f.weight || 400, token: tokenFor('font', f.id) }, CORE_FONT_IDS.includes(f.id) ? { core: true, role: roleOf(f.id) } : {})),
+      radius: { sm: radiusOf(b, 'sm'), md: radiusOf(b, 'md'), lg: radiusOf(b, 'lg'), tokens: 'var(--radius-sm) var(--radius-md) var(--radius-lg)' },
+      logos: listOf(b, 'logos').map((l) => {
+        const o = { id: l.id, name: l.name, src: tokenFor('logo', l.id), format: logoFormat(l.src) };
+        if (Number(l.width) > 0 && Number(l.height) > 0) o.size = [Math.round(l.width), Math.round(l.height)];
+        return o;
+      }),
+      voice,
+      style: {
+        button: st.button || 'rounded',
+        density: st.density || 'comfortable',
+        shadow: st.shadow || 'soft',
+        gradients: (Array.isArray(st.gradients) ? st.gradients.filter(isObj) : []).map((g) => ({ name: g.name, fill: isObj(g.fill) ? compactFill(g.fill) : g.fill })),
+      },
+    };
+  }
+
+  /** How many layers use each token / logo reference in the current document. */
+  function tokenUses() {
+    const uses = new Map();
+    const store = S();
+    Object.values((store && store.doc && store.doc.nodes) || {}).forEach((n) => {
+      let s = '';
+      try {
+        s = JSON.stringify([n.style, n.text, n.image]);
+      } catch (e) {
+        return;
+      }
+      const seen = new Set();
+      const re = /var\(--((?:color|font|radius)-[A-Za-z0-9_-]+)\)|brand-logo:([A-Za-z0-9_-]+)/g;
+      let m;
+      while ((m = re.exec(s))) seen.add(m[1] ? `var(--${m[1]})` : `brand-logo:${m[2]}`);
+      seen.forEach((t) => uses.set(t, (uses.get(t) || 0) + 1));
+    });
+    return uses;
+  }
+
+  function getBrand(input) {
+    const B = brandApi();
+    if (!B) return fail(UNAVAILABLE, 'Brand kits unavailable');
+    const act = activeBrand();
+    const lib = library();
+    const id = input.brand_id != null ? input.brand_id : input.id;
+    let b = act;
+    if (id != null && String(id).trim()) {
+      b = findBrand(String(id).trim());
+      if (!b) return fail(`No brand kit ${q(id)} in the library (${libLine(lib)}).`, 'Brand kit not found');
+    }
+    const out = { active: act ? `${act.id} ${q(act.name)}` : null };
+    if (b) out.brand = brandDetail(b, !!act && act.id === b.id);
+    out.library = lib.map((x) => `${x.id} ${q(x.name)}${act && x.id === act.id ? ' (active)' : ''}`);
+    if (!act) {
+      out.note =
+        'No brand kit is active for this document. Design freely; to make one, call set_brand with "create": true (it becomes the document\'s brand)' +
+        (lib.length ? ', or switch to a library kit with set_brand {"brand_id": "…", "activate": true, "patch": {}}' : '') +
+        '.';
+      const ts = (safe(() => B.templates(), []) || []).filter(isObj);
+      if (ts.length) out.templates = ts.map((t) => `${t.templateId || t.id || ''} ${q(t.name)}${t.blurb ? ' — ' + clip(t.blurb, 60) : ''}`.trim());
+    } else if (b && b.id === act.id) {
+      const uses = tokenUses();
+      const linked = [...uses.values()].length ? [...uses.entries()].map(([t, n]) => `${t} ×${n}`) : [];
+      out.inUse = linked.length ? linked.slice(0, 40) : 'no layers are linked to this kit yet';
+    }
+    return result(out, b ? `Read brand kit ${q(b.name)}` : 'Read brand kits', []);
+  }
+
+  function newId(prefix, taken) {
+    let id = '';
+    for (let i = 0; i < 50 && (!id || taken.has(id)); i++) id = prefix + Math.random().toString(36).slice(2, 6).padEnd(4, '0');
+    return id;
+  }
+  function titleCase(s) {
+    s = String(s).replace(/[-_]+/g, ' ').trim();
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  /** Starting point for a new kit: a template (by id or name) or neutral defaults. */
+  function baseBrand(template, ctx) {
+    const B = brandApi();
+    let base = null;
+    if (template != null && String(template).trim()) {
+      const ts = (safe(() => B.templates(), []) || []).filter(isObj);
+      base = ts.find((t) => t.id === template || t.templateId === template) || ts.find((t) => keyOf(t.name) === keyOf(template) || keyOf(t.templateId) === keyOf(template)) || null;
+      if (!base) ctx.warn(`template ${q(template)} not found${ts.length ? ` (templates: ${ts.map((t) => q(t.name)).join(', ')})` : ''} — started from neutral defaults`);
+    }
+    if (base) base = cloneJson(base);
+    else if (typeof B.normalize === 'function') base = Object.assign(cloneJson(safe(() => B.normalize({}, { keepId: false }), {}) || {}), { name: '' });
+    if (!isObj(base) || !Array.isArray(base.colors)) {
+      base = {
+        name: '',
+        colors: CORE_COLORS.map(([id, name, value]) => ({ id, name, value, core: true })),
+        fonts: CORE_FONTS.map(([id, name, family, weight]) => ({ id, name, family, weight, core: true })),
+        logos: [],
+        voice: { tagline: '', description: '', audience: '', tone: [], useWords: '', avoidWords: '', sampleCopy: '' },
+        style: { radius: Object.assign({}, RADIUS_DEFAULTS), button: 'rounded', density: 'comfortable', shadow: 'soft', gradients: [] },
+      };
+    }
+    ['id', 'updatedAt', 'templateId', 'blurb'].forEach((k) => delete base[k]);
+    base.logos = listOf(base, 'logos').filter((l) => typeof l.src === 'string' && /^https:/i.test(l.src)); // never copy embedded files from templates
+    return base;
+  }
+
+  /** Make sure the core colours and fonts exist (older or hand-edited kits). */
+  function ensureCore(next, ctx) {
+    next.colors = listOf(next, 'colors').map((c) => Object.assign({}, c));
+    next.fonts = listOf(next, 'fonts').map((f) => Object.assign({}, f));
+    next.logos = listOf(next, 'logos').map((l) => Object.assign({}, l));
+    CORE_COLORS.forEach(([id, name, value]) => {
+      if (!next.colors.some((c) => c.id === id)) next.colors.push({ id, name, value, core: true });
+    });
+    CORE_FONTS.forEach(([id, name, family, weight]) => {
+      if (!next.fonts.some((f) => f.id === id)) next.fonts.push({ id, name, family, weight, core: true });
+    });
+  }
+
+  /** Brand entries as an array: accepts [{id, …}] or a map {primary: "#…", heading: {…}}. */
+  function normEntries(v, ctx, label, valueKey, max) {
+    let arr;
+    if (Array.isArray(v)) arr = v;
+    else if (isObj(v)) arr = Object.keys(v).map((k) => (isObj(v[k]) ? Object.assign({ id: k }, v[k]) : { id: k, [valueKey]: v[k] }));
+    else {
+      ctx.warn(`${label} must be an array like [{"id": "…", …}] — ignored`);
+      return [];
+    }
+    if (arr.length > max) ctx.warn(`${label}: only the first ${max} entries were used`);
+    return arr.slice(0, max);
+  }
+  function findEntry(list, it) {
+    const id = it.id != null ? String(it.id).trim() : '';
+    const t = parseVar(id);
+    const key = t ? t.id : id.replace(/^brand-logo:/, '');
+    if (key) {
+      const e = list.find((x) => x.id === key) || list.find((x) => keyOf(x.name) === keyOf(key));
+      if (e) return e;
+    }
+    if (!key && it.name != null) return list.find((x) => keyOf(x.name) === keyOf(it.name)) || null;
+    return null;
+  }
+  const wantsDelete = (it) => yes(it.delete) || yes(it.remove) || yes(it.deleted);
+
+  /** A brand colour value must be a literal; a token is resolved against the kit being edited. */
+  function brandColorValue(v, kit, ctx, label) {
+    const t = parseVar(v);
+    if (t) {
+      const hit = nearestEntry(listOf(kit, 'colors'), t.id, COLOR_ALIASES);
+      const lit = hit && normalizeColor(hit.entry.value);
+      if (lit) {
+        ctx.warn(`${label}: brand colours hold literal values — copied ${lit} from ${tokenFor('color', hit.entry.id)}`);
+        return lit;
+      }
+      ctx.warn(`${label} ${q(v)} is a token that does not resolve — ignored`);
+      return null;
+    }
+    const c = normalizeColor(v);
+    if (!c) ctx.warn(`${label} ${str(v)} is not a valid colour — ignored`);
+    return c;
+  }
+
+  function applyColors(next, raw, ctx, out) {
+    const list = next.colors;
+    normEntries(raw, ctx, 'colors', 'value', 64).forEach((it, i) => {
+      const label = `colors[${i}]`;
+      if (!isObj(it)) return ctx.warn(`${label} must be {id?, name?, value?, delete?} — ignored`);
+      const id = it.id != null ? String(it.id).trim() : '';
+      const name = it.name != null ? clip(it.name, 40) : '';
+      const entry = findEntry(list, it);
+      if (wantsDelete(it)) {
+        if (!entry) return ctx.warn(`${label}: no colour ${q(id || name)} to delete`);
+        if (CORE_COLOR_IDS.includes(entry.id)) return ctx.warn(`${label}: ${entry.id} is a core brand colour and cannot be deleted (change its value instead) — kept`);
+        list.splice(list.indexOf(entry), 1);
+        out.detach.push(tokenFor('color', entry.id));
+        out.changes.push(`removed colour ${entry.id} ${q(entry.name)}`);
+        out.changed.add('colors');
+        return;
+      }
+      const rawVal = it.value != null ? it.value : it.color != null ? it.color : it.hex;
+      let value = null;
+      if (rawVal != null) {
+        value = brandColorValue(rawVal, next, ctx, `${label}.value`);
+        if (!value) return;
+      }
+      if (entry) {
+        if (value && value !== entry.value) {
+          out.changes.push(`${entry.id} ${entry.value} → ${value}`);
+          out.tokens.add(tokenFor('color', entry.id));
+          entry.value = value;
+          out.changed.add('colors');
+        }
+        if (name && name !== entry.name) {
+          out.changes.push(`${entry.id} renamed ${q(entry.name)} → ${q(name)}`);
+          entry.name = name;
+          out.changed.add('colors');
+        }
+        return;
+      }
+      if (!value) return ctx.warn(`${label}: there is no colour ${q(id || name)}; a new colour needs a value — ignored`);
+      if (list.length >= MAX_BRAND_COLORS) return ctx.warn(`${label}: a kit holds at most ${MAX_BRAND_COLORS} colours — ignored`);
+      const nid = newId('c_', new Set(list.map((c) => c.id)));
+      const nm = name || (id ? clip(titleCase(parseVar(id) ? parseVar(id).id : id), 40) : `Colour ${list.length + 1}`);
+      if (id) ctx.warn(`${label}: no colour has the id ${q(id)}, so it was added as the custom colour ${nid} (custom ids are generated)`);
+      list.push({ id: nid, name: nm, value });
+      out.changes.push(`added colour ${nid} ${q(nm)} ${value} → ${tokenFor('color', nid)}`);
+      out.changed.add('colors');
+    });
+  }
+
+  function brandWeight(family, w, ctx, label) {
+    if (typeof w === 'string' && own(WEIGHTS, w.trim().toLowerCase().replace(/[\s_-]/g, ''))) w = WEIGHTS[w.trim().toLowerCase().replace(/[\s_-]/g, '')];
+    const n = num(w, ctx, label, 100, 900, { int: true });
+    return n == null ? null : snapWeight(family, Math.round(n / 100) * 100 || 400, ctx);
+  }
+
+  function applyFonts(next, raw, ctx, out) {
+    const list = next.fonts;
+    normEntries(raw, ctx, 'fonts', 'family', 24).forEach((it, i) => {
+      const label = `fonts[${i}]`;
+      if (typeof it === 'string') it = { family: it };
+      if (!isObj(it)) return ctx.warn(`${label} must be {id?, name?, family?, weight?, delete?} — ignored`);
+      const id = it.id != null ? String(it.id).trim() : '';
+      const name = it.name != null ? clip(it.name, 40) : '';
+      const entry = findEntry(list, it);
+      if (wantsDelete(it)) {
+        if (!entry) return ctx.warn(`${label}: no font ${q(id || name)} to delete`);
+        if (CORE_FONT_IDS.includes(entry.id)) return ctx.warn(`${label}: ${entry.id} is a core brand font and cannot be deleted (change its family instead) — kept`);
+        list.splice(list.indexOf(entry), 1);
+        out.detach.push(tokenFor('font', entry.id));
+        out.changes.push(`removed font ${entry.id} ${q(entry.name)}`);
+        out.changed.add('fonts');
+        return;
+      }
+      const famRaw = it.family != null ? it.family : it.font != null ? it.font : it.value;
+      let family = null;
+      if (famRaw != null) {
+        const t = parseVar(famRaw);
+        if (t) {
+          const hit = nearestEntry(list, t.id, FONT_ALIASES);
+          family = hit ? hit.entry.family : null;
+          ctx.warn(`${label}.family: brand fonts hold family names${family ? ` — copied ${q(family)}` : ` — ${q(famRaw)} does not resolve; ignored`}`);
+        } else {
+          const save = ctx.at;
+          ctx.at = label;
+          family = normalizeFont(famRaw, ctx) || null;
+          ctx.at = save;
+        }
+        if (!family) return;
+      }
+      const fam = family || (entry && entry.family) || 'Inter';
+      const weight = it.weight != null ? brandWeight(fam, it.weight, ctx, `${label}.weight`) : entry && family ? snapWeight(fam, Number(entry.weight) || 400, ctx) : null;
+      if (entry) {
+        if (family && family !== entry.family) {
+          out.changes.push(`${entry.id} ${entry.family} → ${family}`);
+          out.tokens.add(tokenFor('font', entry.id));
+          entry.family = family;
+          out.changed.add('fonts');
+        }
+        if (weight && weight !== entry.weight) {
+          out.changes.push(`${entry.id} weight ${entry.weight || 400} → ${weight}`);
+          entry.weight = weight;
+          out.changed.add('fonts');
+        }
+        if (name && name !== entry.name) {
+          out.changes.push(`${entry.id} renamed ${q(entry.name)} → ${q(name)}`);
+          entry.name = name;
+          out.changed.add('fonts');
+        }
+        return;
+      }
+      if (!family) return ctx.warn(`${label}: there is no font ${q(id || name)}; a new font needs a family — ignored`);
+      if (list.length >= MAX_BRAND_FONTS) return ctx.warn(`${label}: a kit holds at most ${MAX_BRAND_FONTS} fonts — ignored`);
+      const nid = newId('f_', new Set(list.map((f) => f.id)));
+      const nm = name || (id ? clip(titleCase(id), 40) : family);
+      if (id) ctx.warn(`${label}: no font has the id ${q(id)}, so it was added as the custom font ${nid}`);
+      list.push({ id: nid, name: nm, family, weight: weight || 400 });
+      out.changes.push(`added font ${nid} ${q(nm)} ${family} → ${tokenFor('font', nid)}`);
+      out.changed.add('fonts');
+    });
+  }
+
+  function measureImage(src, ms) {
+    return new Promise((res) => {
+      if (typeof Image === 'undefined') return res({ width: 0, height: 0 });
+      const img = new Image();
+      const t = setTimeout(() => res(null), ms);
+      img.onload = () => {
+        clearTimeout(t);
+        res({ width: img.naturalWidth || 0, height: img.naturalHeight || 0 });
+      };
+      img.onerror = () => {
+        clearTimeout(t);
+        res(null);
+      };
+      img.src = src;
+    });
+  }
+
+  async function applyLogos(next, raw, ctx, out) {
+    const list = next.logos;
+    let items = Array.isArray(raw) ? raw : isObj(raw) ? [raw] : null;
+    if (!items) return ctx.warn('logos must be an array like [{"name": "Logo", "src": "https://…"}] — ignored');
+    if (items.length > MAX_BRAND_LOGOS) ctx.warn(`logos: only the first ${MAX_BRAND_LOGOS} entries were used`);
+    items = items.slice(0, MAX_BRAND_LOGOS);
+    for (let i = 0; i < items.length; i++) {
+      const label = `logos[${i}]`;
+      let it = items[i];
+      if (typeof it === 'string') it = { src: it };
+      if (!isObj(it)) {
+        ctx.warn(`${label} must be {id?, name?, src?, delete?} — ignored`);
+        continue;
+      }
+      const entry = it.id != null || it.src == null ? findEntry(list, it) : null;
+      const name = it.name != null ? clip(it.name, 60) : '';
+      if (wantsDelete(it)) {
+        if (!entry) ctx.warn(`${label}: no logo ${q(it.id || name)} to delete`);
+        else {
+          list.splice(list.indexOf(entry), 1);
+          out.detach.push(tokenFor('logo', entry.id));
+          out.changes.push(`removed logo ${entry.id} ${q(entry.name)}`);
+          out.changed.add('logos');
+        }
+        continue;
+      }
+      let src = null;
+      let dims = null;
+      if (it.src != null || it.url != null) {
+        const s = String(it.src != null ? it.src : it.url).trim();
+        if (/^data:/i.test(s) || /^blob:/i.test(s)) {
+          ctx.warn(`${label}: logo files can't be uploaded through set_brand (data: and blob: URLs are refused). Ask the user to upload the logo in the Brand panel, or give an https:// URL`);
+          continue;
+        }
+        let ok = /^https:\/\//i.test(s) && s.length <= 2048;
+        try {
+          ok = ok && new URL(s).protocol === 'https:';
+        } catch (e) {
+          ok = false;
+        }
+        if (!ok) {
+          ctx.warn(`${label}.src ${str(s)} must be an https:// image URL — ignored`);
+          continue;
+        }
+        dims = await measureImage(s, 6000);
+        if (!dims) {
+          ctx.warn(`${label}: the image at ${str(s)} could not be loaded — check the URL (or ask the user to upload the file in the Brand panel)`);
+          continue;
+        }
+        src = s;
+      }
+      if (entry) {
+        if (src && src !== entry.src) {
+          entry.src = src;
+          if (dims.width && dims.height) Object.assign(entry, { width: dims.width, height: dims.height });
+          out.changes.push(`logo ${entry.id} now shows ${clip(src, 60)}`);
+          out.changed.add('logos');
+        }
+        if (name && name !== entry.name) {
+          out.changes.push(`logo ${entry.id} renamed ${q(entry.name)} → ${q(name)}`);
+          entry.name = name;
+          out.changed.add('logos');
+        }
+        continue;
+      }
+      if (!src) {
+        ctx.warn(`${label}: there is no logo ${q(it.id || name)}; a new logo needs an https:// src — ignored`);
+        continue;
+      }
+      if (list.length >= MAX_BRAND_LOGOS) {
+        ctx.warn(`${label}: a kit holds at most ${MAX_BRAND_LOGOS} logos — ignored`);
+        continue;
+      }
+      const nid = newId('l_', new Set(list.map((l) => l.id)));
+      const logo = { id: nid, name: name || `Logo ${list.length + 1}`, src };
+      if (dims.width && dims.height) Object.assign(logo, { width: dims.width, height: dims.height });
+      list.push(logo);
+      out.changes.push(`added logo ${nid} ${q(logo.name)} → image src "brand-logo:${nid}"`);
+      out.changed.add('logos');
+    }
+  }
+
+  const VOICE_TEXT = { tagline: 200, description: 1200, audience: 300, sampleCopy: 2000 };
+  const VOICE_LISTS = { tone: [8, 30], useWords: [40, 40], avoidWords: [40, 40] };
+  const VOICE_ALIASES = { slogan: 'tagline', about: 'description', summary: 'description', audiences: 'audience', sample: 'sampleCopy', example: 'sampleCopy', tones: 'tone', personality: 'tone', words: 'useWords', use: 'useWords', wordsToUse: 'useWords', avoid: 'avoidWords', banned: 'avoidWords', wordsToAvoid: 'avoidWords', dontSay: 'avoidWords' };
+  function applyVoice(next, raw, ctx, out) {
+    if (typeof raw === 'string') raw = { description: raw };
+    if (!isObj(raw)) return ctx.warn('voice must be {tagline, description, audience, tone, useWords, avoidWords, sampleCopy} — ignored');
+    const v = isObj(next.voice) ? Object.assign({}, next.voice) : {};
+    const touched = [];
+    Object.keys(raw).forEach((k0) => {
+      const k = own(VOICE_ALIASES, k0) ? VOICE_ALIASES[k0] : k0;
+      const val = raw[k0];
+      if (own(VOICE_TEXT, k)) {
+        if (val != null && typeof val === 'object') return ctx.warn(`voice.${k0} must be text — ignored`);
+        const s = clipText(val == null ? '' : val, VOICE_TEXT[k]);
+        if (String(val == null ? '' : val).trim().length > VOICE_TEXT[k]) ctx.warn(`voice.${k0} was cut to ${VOICE_TEXT[k]} characters`);
+        if (s !== (v[k] || '')) {
+          v[k] = s;
+          touched.push(k);
+        }
+      } else if (own(VOICE_LISTS, k)) {
+        const [max, len] = VOICE_LISTS[k];
+        const all = asList(val);
+        if (all.length > max) ctx.warn(`voice.${k0}: only the first ${max} entries were kept`);
+        const l = [...new Set(all.map((x) => clip(x, len)))].slice(0, max);
+        const asString = k !== 'tone'; // Folio stores tone as a list, words to use/avoid as comma-separated text
+        const nv = asString ? l.join(', ') : l;
+        if (JSON.stringify(nv) !== JSON.stringify(v[k] == null ? (asString ? '' : []) : v[k])) {
+          v[k] = nv;
+          touched.push(k);
+        }
+      } else ctx.warn(`voice.${k0} is not a voice field (${Object.keys(VOICE_TEXT).concat(Object.keys(VOICE_LISTS)).join(', ')}) — ignored`);
+    });
+    if (touched.length) {
+      next.voice = v;
+      out.changed.add('voice');
+      out.changes.push(`voice: ${touched.join(', ')}`);
+    }
+  }
+
+  const GRADIENT_TYPES = ['linear', 'radial', 'conic', 'mesh'];
+  function applyStyle(next, raw, ctx, out) {
+    if (!isObj(raw)) return ctx.warn('style must be {radius, button, density, shadow, gradients} — ignored');
+    const st = isObj(next.style) ? cloneJson(next.style) : {};
+    const touched = [];
+    const alias = { radii: 'radius', corners: 'radius', buttons: 'button', buttonShape: 'button', buttonStyle: 'button', spacing: 'density', shadows: 'shadow', shadowStrength: 'shadow', gradient: 'gradients', presets: 'gradients' };
+    Object.keys(raw).forEach((k0) => {
+      const k = own(alias, k0) ? alias[k0] : k0;
+      const val = raw[k0];
+      switch (k) {
+        case 'radius': {
+          const r = Object.assign({}, RADIUS_DEFAULTS, isObj(st.radius) ? st.radius : {});
+          let src = val;
+          if (typeof val === 'number' || (typeof val === 'string' && isFinite(parseFloat(val)))) {
+            const md = num(val, ctx, 'style.radius', 0, 200);
+            if (md == null) break;
+            src = { sm: Math.round(md / 2), md, lg: Math.min(200, md * 2) };
+            ctx.warn(`style.radius should be {sm, md, lg} — used sm ${src.sm}, md ${src.md}, lg ${src.lg}`);
+          }
+          if (!isObj(src)) {
+            ctx.warn('style.radius must be {sm, md, lg} in px — ignored');
+            break;
+          }
+          let did = false;
+          Object.keys(src).forEach((rk) => {
+            const id = RADIUS_IDS.includes(rk) ? rk : RADIUS_ALIASES[keyOf(rk)];
+            if (!id) return ctx.warn(`style.radius.${rk} is not sm, md or lg — ignored`);
+            const n = num(src[rk], ctx, `style.radius.${rk}`, 0, 200);
+            if (n != null && n !== r[id]) {
+              r[id] = n;
+              did = true;
+              out.tokens.add(`var(--radius-${id})`);
+            }
+          });
+          if (did) {
+            if (!(r.sm <= r.md && r.md <= r.lg)) ctx.warn(`style.radius is usually sm ≤ md ≤ lg (now ${r.sm} / ${r.md} / ${r.lg})`);
+            st.radius = r;
+            touched.push(`radius ${r.sm}/${r.md}/${r.lg}`);
+          }
+          break;
+        }
+        case 'button':
+        case 'density':
+        case 'shadow': {
+          const opts = { button: ['pill', 'rounded', 'square'], density: ['compact', 'comfortable', 'airy'], shadow: ['none', 'soft', 'bold'] }[k];
+          const al = {
+            button: { round: 'rounded', capsule: 'pill', full: 'pill', sharp: 'square', none: 'square', squared: 'square' },
+            density: { tight: 'compact', dense: 'compact', normal: 'comfortable', regular: 'comfortable', default: 'comfortable', medium: 'comfortable', spacious: 'airy', loose: 'airy', open: 'airy' },
+            shadow: { flat: 'none', off: 'none', subtle: 'soft', light: 'soft', strong: 'bold', hard: 'bold', heavy: 'bold' },
+          }[k];
+          const v = oneOf(val, opts, al, ctx, `style.${k0}`);
+          if (v && v !== st[k]) {
+            st[k] = v;
+            touched.push(`${k} ${v}`);
+          }
+          break;
+        }
+        case 'gradients': {
+          let arr = Array.isArray(val) ? val : isObj(val) ? [val] : null;
+          if (!arr) {
+            ctx.warn('style.gradients must be an array of {name, fill} — ignored');
+            break;
+          }
+          if (arr.length > MAX_GRADIENTS) ctx.warn(`style.gradients: only the first ${MAX_GRADIENTS} were kept`);
+          arr = arr.slice(0, MAX_GRADIENTS);
+          const list = [];
+          brandScope = next; // gradients may link to the kit's own colour tokens
+          try {
+            arr.forEach((g, i) => {
+              const label = `style.gradients[${i}]`;
+              if (!isObj(g)) return ctx.warn(`${label} must be {name, fill} — dropped`);
+              const rawFill = isObj(g.fill) ? g.fill : g.type || g.stops || g.points ? g : null;
+              if (!rawFill) return ctx.warn(`${label} needs a fill such as {"type": "linear", "angle": 135, "stops": […]} — dropped`);
+              const f = sanitizeFill(rawFill, ctx, `${label}.fill`);
+              if (!f) return;
+              if (!GRADIENT_TYPES.includes(f.type)) return ctx.warn(`${label}: a gradient preset must be ${GRADIENT_TYPES.join(' | ')} (not ${f.type}) — dropped`);
+              delete f.visible;
+              list.push({ name: clip(g.name || `Gradient ${list.length + 1}`, 40), fill: f });
+            });
+          } finally {
+            brandScope = undefined;
+          }
+          if (arr.length && !list.length) {
+            ctx.warn('style.gradients: none of the gradients were valid — kept the previous presets');
+            break;
+          }
+          if (JSON.stringify(list) !== JSON.stringify(st.gradients || [])) {
+            st.gradients = list;
+            touched.push(`gradients (${list.length})`);
+          }
+          break;
+        }
+        default:
+          ctx.warn(`style.${k0} is not a brand style field (radius, button, density, shadow, gradients) — ignored`);
+      }
+    });
+    if (touched.length) {
+      next.style = st;
+      out.changed.add('style');
+      out.changes.push(`style: ${touched.join(', ')}`);
+    }
+  }
+
+  async function setBrand(input) {
+    const B = brandApi();
+    if (!B || typeof B.update !== 'function' || typeof B.create !== 'function') return fail(UNAVAILABLE, 'Brand kits unavailable');
+    let size = 0;
+    try {
+      size = JSON.stringify(input).length;
+    } catch (e) {
+      return fail('set_brand input could not be read as JSON.', 'Bad brand input');
+    }
+    if (size > BRAND_MAX_INPUT) return fail(`set_brand input is too large (${Math.round(size / 1024)} KB; the limit is ${Math.round(BRAND_MAX_INPUT / 1024)} KB). Send only the fields that change. Nothing was changed.`, 'Brand patch too large');
+    const ctx = makeCtx('update');
+    ctx.literals = null;
+    let patch = input.patch;
+    if (patch == null) {
+      patch = {};
+      Object.keys(input).forEach((k) => (BRAND_KEYS.includes(k) || own(BRAND_ALIASES, k)) && (patch[k] = input[k]));
+    }
+    if (!isObj(patch)) return fail('set_brand needs "patch": {name?, colors?, fonts?, logos?, voice?, style?}.', 'Bad brand input');
+    const p = {};
+    Object.keys(patch).forEach((k) => {
+      const key = own(BRAND_ALIASES, k) ? BRAND_ALIASES[k] : k;
+      if (BRAND_KEYS.includes(key)) p[key] = patch[k];
+      else ctx.warn(`patch.${k} is not a brand field (${BRAND_KEYS.join(', ')}) — ignored`);
+    });
+
+    const create = yes(input.create);
+    const act = activeBrand();
+    const wantId = input.brand_id != null && String(input.brand_id).trim() ? String(input.brand_id).trim() : null;
+    let target = null;
+    if (!create) {
+      target = wantId ? findBrand(wantId) : act;
+      if (!target)
+        return fail(
+          wantId
+            ? `No brand kit ${q(wantId)} in the library (${libLine(library())}). Pass "create": true to make a new kit.`
+            : 'No brand kit is active for this document. Pass "create": true (with a patch) to make a new kit, which becomes the document\'s brand, or brand_id to edit a kit from the library.',
+          'No brand kit'
+        );
+    } else if (wantId) ctx.warn('brand_id is ignored when "create" is true');
+    const wasActive = !create && !!act && target.id === act.id;
+    const next = create ? baseBrand(input.template, ctx) : cloneJson(target);
+    ensureCore(next, ctx);
+    const out = { changes: [], detach: [], changed: new Set(), tokens: new Set() };
+
+    if (own(p, 'name')) {
+      const nm = clip(typeof p.name === 'string' ? p.name : '', 60);
+      if (!nm) ctx.warn('name must be non-empty text — ignored');
+      else if (nm !== next.name) {
+        out.changes.push(`name ${q(next.name || '')} → ${q(nm)}`);
+        next.name = nm;
+        out.changed.add('name');
+      }
+    }
+    if (own(p, 'colors')) applyColors(next, p.colors, ctx, out);
+    if (own(p, 'fonts')) applyFonts(next, p.fonts, ctx, out);
+    if (own(p, 'logos')) await applyLogos(next, p.logos, ctx, out);
+    if (own(p, 'voice')) applyVoice(next, p.voice, ctx, out);
+    if (own(p, 'style')) applyStyle(next, p.style, ctx, out);
+
+    const activate = create ? input.activate !== false && input.activate !== 'false' : yes(input.activate);
+    if (!create && !out.changed.size && !(activate && !wasActive)) {
+      const w = ctx.warnings();
+      return fail(`Nothing changed in ${q(target.name)}.${w.length ? ' ' + w.join(' ') : ''}`, 'Brand unchanged');
+    }
+    if (create && !own(p, 'colors') && !input.template) ctx.warn('no colours were given, so the kit uses neutral placeholder colours — set at least primary, secondary and accent');
+
+    let id;
+    try {
+      if (create) {
+        if (!next.name) next.name = 'New brand';
+        const made = B.create(next);
+        id = (made && made.id) || (typeof made === 'string' ? made : null);
+        if (!id) return fail('Folio could not create the brand kit.', 'Brand kit not created');
+        if (activate && !(activeBrand() && activeBrand().id === id)) B.setActive(id);
+      } else {
+        id = target.id;
+        if (wasActive && B.detach) out.detach.forEach((tok) => safe(() => B.detach(tok)));
+        if (out.changed.size) {
+          const up = {};
+          out.changed.forEach((k) => (up[k] = next[k]));
+          B.update(id, up);
+        }
+        if (activate && !wasActive) B.setActive(id);
+      }
+    } catch (e) {
+      return fail(`Folio could not save the brand kit: ${(e && e.message) || e}. Call get_brand to see its current state.`, 'Brand kit not saved');
+    }
+
+    const now = activeBrand();
+    const isActive = !!now && now.id === id;
+    const fb = findBrand(id) || next;
+    const res = { brand: `${id} ${q(fb.name)}`, active: isActive };
+    if (create) res.created = true;
+    // a new kit's summary already lists every value; only the generated ids are news
+    const changes = create ? out.changes.filter((c) => /^added /.test(c)) : out.changes;
+    if (changes.length) res.changes = changes.slice(0, 40);
+    res.kit = brandBrief(fb);
+    if (isActive) {
+      const uses = tokenUses();
+      if (wasActive && out.tokens.size) {
+        const linked = [...out.tokens].reduce((a, t) => a + (uses.get(t) || 0), 0);
+        res.linkedLayers = linked ? `${linked} layer link${linked === 1 ? '' : 's'} to the changed tokens updated automatically` : 'no layers use the changed tokens yet';
+      }
+      if (!wasActive) {
+        const missing = [...uses.keys()].filter((t) => {
+          const m = /^var\(--(color|font)-(.+)\)$/.exec(t) || /^brand-logo:(.+)$/.exec(t);
+          if (!m) return false;
+          if (m.length === 2) return !listOf(fb, 'logos').some((l) => l.id === m[1]);
+          return !listOf(fb, m[1] === 'color' ? 'colors' : 'fonts').some((x) => x.id === m[2]);
+        });
+        res.note = `${q(fb.name)} is now the document's brand kit; layers linked to tokens re-skin automatically. Use its tokens in new layers.`;
+        if (missing.length) ctx.warn(`these tokens used in the document are not defined in ${q(fb.name)}, so those layers lose that style: ${missing.slice(0, 12).join(', ')}`);
+      }
+    } else if (!create) res.note = `${q(fb.name)} is saved in the library but is not the document's brand (pass "activate": true to switch to it).`;
+    const w = ctx.warnings();
+    if (w.length) res.warnings = w;
+    const summary = create
+      ? `Created brand kit ${q(fb.name)}${isActive ? '' : ' (not active)'}`
+      : `${out.changed.size ? 'Updated' : 'Switched to'} brand kit ${q(fb.name)}${activate && !wasActive && out.changed.size ? ' and made it active' : ''}`;
+    return result(res, summary, []);
+  }
+
   const HANDLERS = {
     get_document: getDocument,
     get_tree: getTree,
@@ -1885,6 +2949,8 @@ window.Folio = window.Folio || {};
     delete_nodes: deleteNodes,
     move_nodes: moveNodes,
     screenshot,
+    get_brand: getBrand,
+    set_brand: setBrand,
   };
 
   async function execute(name, input) {
@@ -1899,5 +2965,5 @@ window.Folio = window.Folio || {};
     }
   }
 
-  Folio.aiTools = { execute, describeNode, serialize, renderedSize, normalizeColor, names: Object.keys(HANDLERS) };
+  Folio.aiTools = { execute, describeNode, serialize, renderedSize, normalizeColor, brandBrief, brandContext, names: Object.keys(HANDLERS) };
 })();
