@@ -445,3 +445,65 @@ doc.roots === <active page>.roots   // the SAME array object (invariant)
   page unless `page_id` is given. Tools that touch or screenshot a node on another page switch the view to that
   page first (the user follows along) and say so in the result.
 - `add_starter_kit` → Components page; `draft_logo` → Logos page.
+
+---
+
+## HTML import (v0.7)
+
+Turns HTML (+CSS) into **editable Folio layers with auto layout**. Sources: pasted code or an .html file,
+a selection copied from a live website, a URL (via Claude Code / the MCP bridge), the user's own code.
+
+### `src/import.js` → `Folio.importer`
+- `fromHtml(html, { width = 1440, name, baseUrl, pageId, parentId = null, x, y, selector })` →
+  `Promise<{ rootId, count, warnings: [], skipped: { reason: count } }>`. Never commits (callers commit once).
+- **Rendering:** a hidden `<iframe sandbox="allow-same-origin">` (no `allow-scripts`, so no script ever runs),
+  `width` px wide, `srcdoc` = sanitised HTML with `<base href=baseUrl>` when given. Before loading, strip
+  `<script>`, `on*` attributes, `<meta http-equiv>`, `<iframe>/<object>/<embed>/<frame>`, forms' actions,
+  `javascript:` URLs. Wait for load + `document.fonts.ready` (timeout ~8 s), then read
+  `getComputedStyle` + `getBoundingClientRect` for every element. Remove the iframe afterwards.
+  `selector` optionally imports only the first matching element.
+- **Conversion rules** (editable first, close to the original):
+  - Elements with element children → frames. `display:flex` → Folio flex (direction, wrap, gap/row-gap,
+    justify, align, padding). Block flow (block children stacked) → flex column; vertical margins between
+    siblings become `gap` when uniform, otherwise spacer-free per-child padding approximations are fine; record
+    differences ≤ 2px as acceptable. `display:grid` → flex row with wrap and the column gap (approximation,
+    warn). `position:absolute/fixed` children → the parent becomes freeform for those (or wrap them) with measured x/y.
+  - Sizing from measurement: a child as wide as its parent's content box → `w: fill`; text that wraps → `w: fill`
+    or fixed; inline-ish / shrink-to-fit → `hug`; otherwise fixed measured px. Heights hug unless the element
+    has an explicit height/min-height that differs from its content (then fixed).
+  - Text: an element whose content is text (incl. inline children like `<b>`, `<a>`, `<span>`) → one text node
+    with the element's computed font (first family; Google font name kept, `Folio.fonts.ensure`), size, weight,
+    line-height (as multiplier), letter-spacing (em), colour, align, transform, italic, decoration. Inline styling
+    differences inside the run are flattened (warn once). Mixed blocks of text + elements → text nodes for each
+    text run in order.
+  - Visuals: background-color → solid fill; `linear-gradient(...)` → linear fill (parse angle + stops; fall back
+    to the first colour); background-image url → image fill (`fit` from background-size); border (uniform width
+    + colour; else the top border), border-radius (per corner when different), box-shadow (parse each),
+    opacity, `overflow:hidden` → clip, filter blur / backdrop-filter blur.
+  - `<img>` / `<picture>` → image node (absolute `currentSrc`, `object-fit`); inline `<svg>` → image node with
+    `Folio.svg.sanitize` → `toDataUrl`; `<video>/<canvas>` → frame placeholder with the poster/none (warn).
+  - Skip: invisible (`display:none`, `visibility:hidden`, 0×0, opacity 0 with no children), `<head>` contents,
+    comments. Collapse pure wrappers (no fill/border/shadow/padding/radius, one child, same box) into the child.
+  - Names: `aria-label` / id / first class / tag, e.g. "header", "Button", "hero" (trimmed, ≤ 40 chars).
+  - Limits: 3,000 layers (stop with a warning), 3 MB HTML.
+- The import becomes a new artboard (`parentId null`, placed to the right of existing artboards on the page) named
+  from `name`, `<title>` or "Imported page", width = `width`, height hug, fill = the body background.
+
+### UI
+- File menu → **Import HTML…**: a modal with a code textarea, "Open .html file", width presets
+  (Desktop 1440 / Laptop 1280 / Tablet 768 / Mobile 390), optional base URL for relative links, Import button,
+  progress + warnings summary. Commit once; select + zoom to the new artboard.
+- **Paste from a website:** ⇧⌘V (and the `paste` event when the clipboard holds `text/html` that did not come from
+  Folio) imports the clipboard HTML as layers into the selected frame (or a new artboard). Normal ⌘V keeps
+  pasting Folio layers.
+
+### AI + bridge
+- Tool `import_html` `{ html, width?, name?, base_url?, page_id?, parent_id?, selector? }` → importer → returns the
+  artboard id, layer count, warnings, and a short tree outline so Claude can refine it with update_nodes.
+- Tool `import_url` `{ url, width?, selector? }`: handled **in mcp/folio-mcp.js (Node)**: fetch with a 15 s
+  timeout, ≤ 3 MB, http(s) only, refuse private/loopback/link-local addresses (resolve DNS first), follow ≤ 5
+  redirects re-checking each; then forward as `import_html` with `base_url` = final URL. In the in-app chat
+  (no Node) `import_url` returns a clear error suggesting Claude Code or pasting the HTML.
+- Prompt: when the user gives code, a URL to recreate, or asks to bring their site/components into Folio →
+  import first, then screenshot, then clean up (rename layers, link brand tokens, make repeated parts components).
+  Mention that script-built pages may import nearly empty.
