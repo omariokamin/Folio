@@ -1,8 +1,8 @@
 /*
  * brand-panel.js — the "Brand" tab in the left panel.
  *
- *   Folio.brandPanel.init()      build the Layers / Brand tabs and the brand kit panel (#brand-panel)
- *   Folio.brandPanel.show(tab)   'layers' | 'brand'
+ *   Folio.brandPanel.init()      build the Layers / Brand / Components tabs and the brand kit panel (#brand-panel)
+ *   Folio.brandPanel.show(tab)   'layers' | 'brand' | 'components' (#components-panel is components-panel.js)
  *   Folio.brandPanel.refresh()
  *
  * Everything here edits the document's ACTIVE brand through Folio.brand.update(...) (live), and
@@ -22,7 +22,7 @@ window.Folio = window.Folio || {};
   const TAB_KEY = 'folio:leftTab';
   const COLLAPSE_KEY = 'folio:brandPanel:collapsed';
 
-  let leftPanel, tabsEl, layersEl, panel, tabLayers, tabBrand, fileInput, logoInput;
+  let leftPanel, tabsEl, layersEl, panel, tabLayers, tabBrand, tabComps, fileInput, logoInput;
   let dirty = true;
   let quiet = 0; // > 0 while the panel itself makes live edits (no full re-render)
   let raf = 0;
@@ -212,26 +212,32 @@ window.Folio = window.Folio || {};
     tabsEl.setAttribute('role', 'tablist');
     tabLayers = h('button', { type: 'button', class: 'bp-tab', role: 'tab', onClick: () => show('layers') }, icon('layers', 13), 'Layers');
     tabBrand = h('button', { type: 'button', class: 'bp-tab', role: 'tab', title: 'Brand kit: colours, fonts, logos, voice', onClick: () => show('brand') }, icon('drop', 13), 'Brand');
-    tabsEl.append(tabLayers, tabBrand);
+    tabComps = h('button', { type: 'button', class: 'bp-tab', role: 'tab', title: 'Components: reusable pieces you can drop into any design', onClick: () => show('components') }, icon('grid', 13), 'Components');
+    tabsEl.append(tabLayers, tabBrand, tabComps);
   }
 
   function current() {
-    return panel && !panel.hidden ? 'brand' : 'layers';
+    const comps = document.getElementById('components-panel');
+    return comps && !comps.hidden ? 'components' : panel && !panel.hidden ? 'brand' : 'layers';
   }
 
   function show(tab, { remember = true } = {}) {
+    if (tab !== 'brand' && tab !== 'components') tab = 'layers';
     const brand = tab === 'brand';
-    if (layersEl) layersEl.hidden = brand;
+    const comps = document.getElementById('components-panel');
+    if (layersEl) layersEl.hidden = tab !== 'layers';
     if (panel) panel.hidden = !brand;
+    if (comps) comps.hidden = tab !== 'components';
     if (leftPanel) leftPanel.classList.toggle('is-brand', brand);
-    tabLayers.classList.toggle('is-active', !brand);
-    tabBrand.classList.toggle('is-active', brand);
-    tabLayers.setAttribute('aria-selected', String(!brand));
-    tabBrand.setAttribute('aria-selected', String(brand));
-    if (remember) lsSet(TAB_KEY, brand ? 'brand' : 'layers');
+    [[tabLayers, 'layers'], [tabBrand, 'brand'], [tabComps, 'components']].forEach(([t, name]) => {
+      t.classList.toggle('is-active', tab === name);
+      t.setAttribute('aria-selected', String(tab === name));
+    });
+    if (remember) lsSet(TAB_KEY, tab);
     if (leftPanel) leftPanel.scrollTop = 0;
     if (brand && dirty) render();
-    if (!brand && Folio.layers && Folio.layers.refresh) Folio.layers.refresh();
+    if (tab === 'layers' && Folio.layers && Folio.layers.refresh) Folio.layers.refresh();
+    if (tab === 'components' && Folio.componentsPanel && Folio.componentsPanel.refresh) Folio.componentsPanel.refresh();
   }
 
   // =====================================================================
@@ -1202,7 +1208,7 @@ window.Folio = window.Folio || {};
     store.on('doc', schedule);
     store.on('history', (label) => label === undefined && schedule());
     const saved = lsGet(TAB_KEY, 'layers');
-    show(saved === 'brand' ? 'brand' : 'layers', { remember: false });
+    show(saved, { remember: false });
     render();
   }
 
