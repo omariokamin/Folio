@@ -283,10 +283,10 @@ window.Folio = window.Folio || {};
         if (state === 'connected' || state === 'busy') setState('busy');
         const result = cleanResult(await execute(call));
         if (result.summary) lastSummary = result.summary;
+        if (state === 'busy') setState('busy'); // show the summary right away
         const mutating = !READ_ONLY.has(call.name) && (!result.isError || result.changedIds.length);
         if (mutating) burst.push(result.summary || humanName(call.name));
         await post(call.id, result);
-        if (state === 'busy') setState('busy');
       }
     } finally {
       running = false;

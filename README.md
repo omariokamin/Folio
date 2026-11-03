@@ -184,11 +184,9 @@ adds its piece to a single global object, `window.Folio`.
 
 ## Ideas for next steps
 
+_Done in v0.2: the AI designer (✦ AI tab, API key) and the Claude Code connection (MCP, Claude subscription)._
+
 - **Components.** Make a button once, reuse it everywhere, and update every copy at once.
-- **An AI designer.** Send a prompt to the Claude API and have it reply with a layer tree.
-  `Folio.store.buildFromTree()` already turns such a tree into layers (see `src/demo.js`).
-- **An MCP server** so Claude Code can design directly on your canvas: create artboards, edit
-  layers and export, while you watch.
 - **Tailwind export.** Turn the CSS of each layer into Tailwind utility classes.
 - **Multiple pages** in one document (for example "Website", "Social", "Ideas").
 - **HTML import.** Paste an existing web page or snippet and turn it into editable layers.
