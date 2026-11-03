@@ -228,7 +228,7 @@ window.Folio = window.Folio || {};
       return { content: 'Folio\'s AI tools (src/ai-tools.js) are not loaded in this tab. Ask the user to reload Folio.', isError: true, summary: 'Tools missing' };
     }
     try {
-      const r = await tools.execute(call.name, call.input || {});
+      const r = await withLiveFrames(() => tools.execute(call.name, call.input || {}));
       if (r && typeof r === 'object') return r;
       return { content: String(r == null ? 'Done.' : r), isError: false, summary: '' };
     } catch (e) {
@@ -281,12 +281,10 @@ window.Folio = window.Folio || {};
         clearTimeout(commitTimer);
         lastSummary = humanName(call.name);
         if (state === 'connected' || state === 'busy') setState('busy');
-        const rootsBefore = Folio.store ? Folio.store.doc.roots.slice() : [];
         const result = cleanResult(await execute(call));
         if (result.summary) lastSummary = result.summary;
         const mutating = !READ_ONLY.has(call.name) && (!result.isError || result.changedIds.length);
         if (mutating) burst.push(result.summary || humanName(call.name));
-        revealNewArtboards(rootsBefore);
         await post(call.id, result);
         if (state === 'busy') setState('busy');
       }
@@ -310,14 +308,51 @@ window.Folio = window.Folio || {};
     );
   }
 
-  /** When Claude creates a new artboard off-screen, bring it into view so the person can watch. */
-  function revealNewArtboards(before) {
+  /*
+   * Browsers pause requestAnimationFrame in hidden tabs, and on a Mac a browser window that is
+   * completely covered by Terminal counts as hidden. Folio renders (and the screenshot tool waits)
+   * on animation frames, so while a call runs in a hidden tab we briefly swap in a stand-in that
+   * runs frame callbacks right away (MessageChannel tasks are not throttled like timers).
+   */
+  const SHIM_BASE = 1e9;
+  let shimSeq = 0;
+  const shimQueue = new Map();
+  let shimPort = null;
+  function shimFlush() {
+    const due = Array.from(shimQueue.entries());
+    shimQueue.clear();
+    const now = performance.now();
+    due.forEach(([, cb]) => {
+      try {
+        cb(now);
+      } catch (e) {
+        console.error(e);
+      }
+    });
+  }
+  function shimRaf(cb) {
+    if (!shimPort) {
+      const ch = new MessageChannel();
+      ch.port1.onmessage = shimFlush;
+      shimPort = ch.port2;
+    }
+    const id = SHIM_BASE + ++shimSeq;
+    if (!shimQueue.size) shimPort.postMessage(0);
+    shimQueue.set(id, cb);
+    return id;
+  }
+  async function withLiveFrames(fn) {
+    if (!document.hidden || typeof MessageChannel !== 'function') return fn();
+    const realRaf = window.requestAnimationFrame;
+    const realCancel = window.cancelAnimationFrame;
+    window.requestAnimationFrame = shimRaf;
+    window.cancelAnimationFrame = (id) => (id > SHIM_BASE ? shimQueue.delete(id) : realCancel.call(window, id));
     try {
-      const store = Folio.store;
-      const fresh = store.doc.roots.filter((id) => !before.includes(id));
-      if (fresh.length && Folio.canvas && Folio.canvas.zoomToFit) Folio.canvas.zoomToFit(fresh);
-    } catch (e) {
-      /* cosmetic only */
+      return await fn();
+    } finally {
+      // callbacks already queued on the stand-in still run (on its own MessageChannel)
+      window.requestAnimationFrame = realRaf;
+      window.cancelAnimationFrame = realCancel;
     }
   }
 

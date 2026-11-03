@@ -116,6 +116,8 @@ chat panel (ai.js) ──► Claude Messages API (streaming, tool use, official 
   - Never force tools: `tool_choice` stays default (`auto`). No assistant prefill.
   - Refusal fallbacks ON for Opus/Sonnet: add `betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default'`.
     Haiku: omit both. Response content may contain `type:'fallback'` blocks — show a small note, keep them in history.
+- Exception (per API docs): after a mid-output fallback, omit `thinking`, `redacted_thinking` and `tool_use`
+  blocks that appear *before* the final `fallback` block when echoing that turn; everything else echoes normally.
 - Loop: append `message.content` **unchanged** as the assistant turn (thinking blocks included — history is
   append-only; never edit or delete earlier turns). Execute every `tool_use` block, then send **all**
   `tool_result` blocks in **one** user message (`is_error: true` on failures). Stop on `end_turn`;

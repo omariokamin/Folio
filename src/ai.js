@@ -126,7 +126,12 @@ window.Folio = window.Folio || {};
   }
 
   const modelInfo = (id) => MODELS.find((m) => m.id === id) || null;
-  const modelLabel = (id) => (modelInfo(id) ? modelInfo(id).label : String(id || 'another model'));
+  function modelLabel(id) {
+    if (modelInfo(id)) return modelInfo(id).label;
+    const m = /^claude-([a-z]+)-(\d+)(?:-(\d+))?/.exec(String(id || ''));
+    if (!m) return id ? String(id) : 'another model';
+    return m[1][0].toUpperCase() + m[1].slice(1) + ' ' + m[2] + (m[3] ? '.' + m[3] : '');
+  }
 
   // ---------- the SDK (loaded on first use) ----------
   let sdkPromise = null;
@@ -360,7 +365,7 @@ window.Folio = window.Folio || {};
     save.addEventListener('click', doSave);
 
     const link = h('a', { href: KEYS_URL, target: '_blank', rel: 'noopener noreferrer' }, 'console.anthropic.com → API keys');
-    const readme = h('a', { href: 'README.md#use-with-claude-code', target: '_blank', rel: 'noopener' }, 'Use with Claude Code');
+    const readme = h('a', { href: 'README.md#use-with-claude-code-claude-subscription', target: '_blank', rel: 'noopener' }, 'Use with Claude Code');
 
     keyCard.replaceChildren(
       h(
@@ -459,7 +464,7 @@ window.Folio = window.Folio || {};
       ? h(
           'div',
           { class: 'ai-pop__row' },
-          h('span', { class: 'ai-pop__status' }, h('i', { class: 'ai-pop__ok' }), keyIsRemembered() ? 'Saved on this device' : 'Saved for this session'),
+          h('span', { class: 'ai-pop__status' }, h('i', { class: 'ai-pop__ok' }), keyIsRemembered() ? 'Saved on this device' : 'Saved for this tab only'),
           h('button', { class: 'f-btn f-btn--ghost', type: 'button', onClick: () => (closePop(), (changingKey = true), renderKeyState()) }, 'Change'),
           h(
             'button',
@@ -826,6 +831,13 @@ window.Folio = window.Folio || {};
     const chips = {}; // tool_use id -> chip
     const dirty = new Set();
     let raf = 0;
+    const pending = h('div', { class: 'ai-pending' }, h('i', { class: 'ai-spin' }), h('span', {}, 'Working…'));
+    const showPending = () => {
+      stick = isNearBottom();
+      el.appendChild(pending); // (re)moves it to the end
+      scrollToEnd();
+    };
+    const hidePending = () => pending.remove();
 
     const flush = () => {
       raf = 0;
@@ -842,7 +854,8 @@ window.Folio = window.Folio || {};
     };
     const add = (node) => {
       stick = isNearBottom();
-      el.appendChild(node);
+      if (pending.parentNode) el.insertBefore(node, pending);
+      else el.appendChild(node);
       scrollToEnd();
       return node;
     };
@@ -920,9 +933,12 @@ window.Folio = window.Folio || {};
         blocks = {};
         curText = null;
         curThinking = null;
+        showPending();
       },
+      showPending,
       startBlock(index, block) {
         if (!block) return;
+        hidePending();
         if (block.type === 'text') {
           finishThinking(curThinking);
           curText = textPiece();
@@ -957,9 +973,11 @@ window.Folio = window.Folio || {};
       },
       chipFor,
       note(text, kind) {
+        hidePending();
         return add(h('div', { class: 'ai-note' + (kind ? ' ai-note--' + kind : '') }, text));
       },
       error(title, message, actions) {
+        hidePending();
         return add(
           h(
             'div',
@@ -981,6 +999,7 @@ window.Folio = window.Folio || {};
       },
       /** End of run: stop spinners, cancel chips that never ran, drop empty text. */
       finalize() {
+        hidePending();
         if (raf) {
           cancelAnimationFrame(raf);
           flush();
@@ -1233,6 +1252,7 @@ window.Folio = window.Folio || {};
     const results = [];
     for (const b of blocks) {
       const chip = run.view.chipFor(b);
+      chip.block = b; // the final block, with its fully parsed input
       if (run.stopped) {
         results.push({ type: 'tool_result', tool_use_id: b.id, content: 'Not run: the user pressed Stop.', is_error: true });
         chip.setState('cancelled', `${TOOL_LABELS[b.name] || b.name} — stopped`);
@@ -1265,6 +1285,7 @@ window.Folio = window.Folio || {};
 
   async function runLoop(run) {
     const view = run.view;
+    view.showPending();
     try {
       const Anthropic = await loadSdk();
       run.Anthropic = Anthropic;

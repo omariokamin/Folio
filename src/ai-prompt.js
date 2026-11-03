@@ -14,6 +14,9 @@
 window.Folio = window.Folio || {};
 
 (function () {
+  // `window` may be a bare object (Node vm in the MCP bridge), so never rely on a global `Folio`.
+  const Folio = window.Folio;
+
   // Kept in sync with src/fonts.js by hand (fonts.js may not be loaded when this runs in Node).
   const FONTS = [
     ['Inter', 'sans-serif', '100–900'],
@@ -160,7 +163,7 @@ Leave out anything you don't need; omitted fields keep sensible defaults.
 - hug: shrink to fit the content (a frame wraps its children plus padding; a text wraps its words). A text with hug width never wraps, so use it only for short labels.
 - fill: take the remaining space along a flex parent's direction, or stretch across the other axis. Inside a freeform parent, fill means 100%.
 - Defaults: if you give width (or height) and no sizing for that axis, the axis is fixed; if you leave both out, frames and text hug. Setting width or height in an update also makes that axis fixed unless you send sizing too.
-- Headings and paragraphs that might wrap need "sizing": {"w": "fill"} (or a fixed width) so they wrap instead of running off in one long line.
+- Headings and paragraphs that might wrap need "sizing": {"w": "fill"} (or a fixed width) so they wrap instead of running off in one long line. Their parent needs a real width too: a frame that hugs its width grows to fit the unwrapped text, so give frames that hold paragraphs a fixed or fill width.
 - Artboards cannot fill. For web pages give the artboard a fixed width and "h": "hug" so the page grows as you add sections.
 
 ## Layout (frames)
@@ -288,7 +291,7 @@ For small edits ("make the button blue"), skip the planning: find the node, upda
 # Tool results
 
 - Trees in results leave out fields that equal their defaults. "_rendered": [w, h] is the real on-screen size of layers that hug or fill. "childCount" replaces children that are deeper than the requested depth.
-- create_nodes returns every new id with its layer path. Read the warnings in results: they tell you what was corrected or ignored.
+- create_nodes returns every new id with its layer path. Read "warnings" (what was corrected or ignored) and "layout" (layers that overflow their parent) in results and fix what they point out.
 
 # Example: a hero section, added to a 1440-wide artboard whose layout is a flex column
 

@@ -46,6 +46,33 @@ else works offline.
 
 ---
 
+## Use with Claude Code (Claude subscription)
+
+Let Claude design on your canvas while you watch, using the Claude Pro/Max subscription you're
+already logged in to Claude Code with. No API key is needed, and Folio never sees your Claude login.
+
+You need [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) (logged in) and
+Node.js 18+ (check with `node --version`; if it's missing, get the LTS installer from
+<https://nodejs.org>). Then, in Terminal:
+
+```bash
+cd ~/Documents/GitHub/folio
+```
+
+```bash
+claude
+```
+
+Approve the **folio** MCP server when Claude Code asks (type `/mcp` to check that it's connected),
+then ask something like *"Design an Instagram post for my bakery"*. Your browser opens Folio at
+`http://localhost:4317` and the design appears live. Keep the tab open; press `⌘Z` in Folio to undo
+Claude's last burst of changes. Usage counts toward your subscription's limits.
+
+The full step-by-step guide, including troubleshooting, is in
+[docs/claude-code.md](docs/claude-code.md).
+
+---
+
 ## Features
 
 - **Infinite canvas** with artboards. Presets for Desktop, Laptop, Tablet, Mobile, Instagram
