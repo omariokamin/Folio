@@ -1963,6 +1963,7 @@ window.Folio = window.Folio || {};
       }
       const sc = instanceScope(node.id);
       if (sc) {
+        if (sc.root && node.instance) { const k = comps().get(node.instance.componentId); keepFixedAxes(k && S().get(k.mainId), patch, ctx); }
         const part = overridablePart(node, patch, sc.root);
         if (part.dropped.length)
           ctx.warn(`${part.dropped.join(', ')} not changed: this layer is part of an instance, so only overrides apply (text content and colour, fills, border colour, image src/fit, visible${sc.root ? '; the instance root also owns name, position, size and sizing' : ''}). Use update_instances to switch variants, or edit the main${node.sourceId ? ' (' + node.sourceId + ')' : ''} to change every instance`);
@@ -3232,7 +3233,19 @@ window.Folio = window.Folio || {};
     return { comp: hit };
   }
 
-  function rootFieldsOf(item, ctx) {
+  /** "hug" on an axis where the main is a fixed size collapses the instance (a 48px button shrinks to its label), so keep the main's size. */
+  function keepFixedAxes(main, p, ctx) {
+    if (!main || !p || !p.sizing) return;
+    ['w', 'h'].forEach((ax) => {
+      const dim = ax === 'w' ? 'width' : 'height';
+      if (p.sizing[ax] !== 'hug' || p[dim] != null || !main.sizing || main.sizing[ax] !== 'fixed') return;
+      p.sizing = Object.assign({}, p.sizing, { [ax]: 'fixed' });
+      p[dim] = main[dim];
+      ctx.warn(`kept ${dim} fixed at ${main[dim]}px like the main component (hug would shrink it to its content); send a ${dim} to change it`);
+    });
+  }
+
+  function rootFieldsOf(item, ctx, main) {
     const raw = {};
     ['name', 'width', 'height', 'sizing'].forEach((k) => item[k] !== undefined && (raw[k] = item[k]));
     if (!Object.keys(raw).length) return null;
@@ -3241,6 +3254,7 @@ window.Folio = window.Folio || {};
       const dim = ax === 'w' ? 'width' : 'height';
       if (p[dim] != null && !(p.sizing && p.sizing[ax])) p.sizing = Object.assign({}, p.sizing, { [ax]: 'fixed' });
     });
+    keepFixedAxes(main, p, ctx);
     return Object.keys(p).length ? p : null;
   }
 
@@ -3273,7 +3287,7 @@ window.Folio = window.Folio || {};
       }
       ctx.at = `items[${i}] ${q(comp.name)}`;
       const overrides = cleanOverrides(item.overrides, comp.mainId, ctx) || {};
-      const rootPatch = rootFieldsOf(item, ctx);
+      const rootPatch = rootFieldsOf(item, ctx, store.get(comp.mainId));
       if (rootPatch) overrides[''] = Object.assign({}, overrides[''], rootPatch);
       const opts = { parentId: pid, overrides };
       if (item.index != null && isFinite(Number(item.index))) opts.index = Math.max(0, Math.round(Number(item.index)));
