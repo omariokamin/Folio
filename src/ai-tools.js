@@ -232,6 +232,8 @@ window.Folio = window.Folio || {};
     ['surface', 'Surface', '#f4f4f5'],
     ['text', 'Text', '#18181b'],
     ['muted', 'Muted', '#71717a'],
+    ['success', 'Success', '#16a34a'],
+    ['danger', 'Danger', '#dc2626'],
   ];
   const CORE_COLOR_IDS = CORE_COLORS.map((c) => c[0]);
   const CORE_FONTS = [
@@ -241,7 +243,7 @@ window.Folio = window.Folio || {};
   const CORE_FONT_IDS = CORE_FONTS.map((f) => f[0]);
   const RADIUS_IDS = ['sm', 'md', 'lg'];
   const RADIUS_DEFAULTS = { sm: 6, md: 12, lg: 24 };
-  const COLOR_ALIASES = { brand: 'primary', main: 'primary', cta: 'primary', action: 'primary', second: 'secondary', highlight: 'accent', pop: 'accent', bg: 'background', page: 'background', canvas: 'background', paper: 'background', card: 'surface', panel: 'surface', elevated: 'surface', foreground: 'text', fg: 'text', ink: 'text', body: 'text', heading: 'text', subtle: 'muted', grey: 'muted', gray: 'muted', caption: 'muted', border: 'muted' };
+  const COLOR_ALIASES = { brand: 'primary', main: 'primary', cta: 'primary', action: 'primary', second: 'secondary', highlight: 'accent', pop: 'accent', bg: 'background', page: 'background', canvas: 'background', paper: 'background', card: 'surface', panel: 'surface', elevated: 'surface', foreground: 'text', fg: 'text', ink: 'text', body: 'text', heading: 'text', subtle: 'muted', grey: 'muted', gray: 'muted', caption: 'muted', border: 'muted', ok: 'success', positive: 'success', green: 'success', error: 'danger', destructive: 'danger', warning: 'danger', red: 'danger' };
   const FONT_ALIASES = { display: 'heading', headline: 'heading', headings: 'heading', title: 'heading', h1: 'heading', header: 'heading', primary: 'heading', text: 'body', paragraph: 'body', copy: 'body', base: 'body', secondary: 'body', ui: 'body' };
   const RADIUS_ALIASES = { s: 'sm', small: 'sm', xs: 'sm', xsmall: 'sm', m: 'md', medium: 'md', base: 'md', default: 'md', l: 'lg', large: 'lg', xl: 'lg', '2xl': 'lg', xxl: 'lg' };
 
