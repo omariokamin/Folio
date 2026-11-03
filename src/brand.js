@@ -917,8 +917,9 @@ window.Folio = window.Folio || {};
     if (!file) throw new Error('No file.');
     const isSvg = file.type === 'image/svg+xml' || /\.svg$/i.test(file.name || '');
     if (isSvg) {
-      const text = String(await readAs(file, 'text'));
+      let text = String(await readAs(file, 'text'));
       if (!/<svg[\s>]/i.test(text)) throw new Error('That SVG file looks broken.');
+      if (Folio.svg) text = Folio.svg.sanitize(text).svg; // uploads get the same whitelist as Claude's drafts
       const src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(text)));
       if (src.length > LOGO_MAX_BYTES) throw new Error('That SVG is too large (over 1.5 MB).');
       let { width, height } = svgSize(text);
