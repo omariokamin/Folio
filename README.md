@@ -213,6 +213,13 @@ adds its piece to a single global object, `window.Folio`.
 | `src/export.js` | Generates HTML/CSS, the standalone page and PNGs; saves/opens files; the code panel. |
 | `src/shortcuts.js` | All keyboard shortcuts and the shortcuts help window. |
 | `src/demo.js` | Builds the starter document. A good example of how designs are described. |
+| `src/brand.js` | Brand kits: the library, the active brand, and the CSS variables (`--color-primary`, …) that link layers to it. |
+| `src/brand-panel.js` | The Brand tab next to Layers: colours, fonts, logos, voice and style rules. |
+| `src/ai-prompt.js` | Claude's design guide and the list of tools it can use on the canvas. |
+| `src/ai-tools.js` | What those tools do: create, edit, move, delete layers, screenshots, brand kits. |
+| `src/ai.js` | The ✦ AI chat tab (uses an Anthropic API key). |
+| `src/bridge.js` | Connects the open Folio tab to Claude Code (your Claude subscription). |
+| `mcp/folio-mcp.js` | The small local server Claude Code starts to talk to Folio. |
 | `src/main.js` | Starts everything in the right order. |
 | `styles/base.css` | Colours, spacing and shared controls (buttons, inputs). |
 | `styles/canvas.css` | Canvas and selection overlay styles. |

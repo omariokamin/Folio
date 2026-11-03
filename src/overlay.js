@@ -146,7 +146,8 @@ window.Folio = window.Folio || {};
 
   /** The node's corner radius scaled to screen px, so hover outlines hug rounded shapes. */
   function radiusCss(n, z, b) {
-    const r = n && n.style && n.style.radius;
+    let r = n && n.style && n.style.radius;
+    if (typeof r === 'string' && Folio.brand && Folio.brand.resolveRadius) r = Folio.brand.resolveRadius(r);
     if (!r) return '';
     const max = Math.min(b.width, b.height) / 2;
     const one = (v) => Math.min(max, (Number(v) || 0) * z) + 'px';
