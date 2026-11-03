@@ -39,6 +39,10 @@
 .kp-group__toggle .f-icon { width: 12px; height: 12px; color: var(--text-3); flex-shrink: 0; }
 .kp-group__count { color: var(--text-3); font-size: 10.5px; font-variant-numeric: tabular-nums; }
 .kp-more { width: 24px !important; height: 24px !important; }
+.kp-rename { height: 24px; font-size: 11px; }
+.kp-group__head > .kp-rename { flex: 1; }
+.kp-tile__name[hidden], .kp-group__name[hidden] { display: none; }
+.kp-tile > .kp-rename { margin-top: 4px; }
 
 .kp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .kp-tile { position: relative; min-width: 0; }

@@ -1421,12 +1421,25 @@ window.Folio = window.Folio || {};
     if (!root) return null;
     const maxDepth = opts.depth == null ? 8 : opts.depth;
     const maxNodes = opts.maxNodes == null ? 400 : opts.maxNodes;
+    const C = comps();
+    // instance internals follow the main: list them only when reading the instance (or a layer in it) itself
+    const collapse = !!C && !opts.expandInstances && !C.instanceRootOf(id);
     let count = 0;
     const walk = (n, d) => {
       count++;
       const parent = n.parent ? store.get(n.parent) : null;
       const parentFlex = parent && parent.layout && parent.layout.mode === 'flex';
       const o = { id: n.id, type: n.type, name: n.name };
+      const mc = C && n.component && C.componentOf(n.id);
+      if (mc) o.component = Object.assign({ id: mc.id, name: mc.name }, varText(mc.variant) ? { variant: mc.variant } : {});
+      const ic = C && n.instance && C.get(n.instance.componentId);
+      if (ic) {
+        o.instance = { component: `${ic.id} ${q(ic.name)}` };
+        if (varText(ic.variant)) o.instance.variant = ic.variant;
+        const ov = C.overridesOf(n.id);
+        if (Object.keys(ov).length) o.instance.overrides = ov;
+      }
+      const folded = !!ic && collapse && n.type === 'frame' && n.children && n.children.length;
       if (!parentFlex) {
         o.x = r2(n.x || 0);
         o.y = r2(n.y || 0);
@@ -1462,6 +1475,11 @@ window.Folio = window.Folio || {};
       }
       const st = compactStyle(n, !parent);
       if (Object.keys(st).length) o.style = st;
+      if (folded) {
+        // layout and style come from the main; overrides already show what differs
+        delete o.layout;
+        delete o.style;
+      }
       if (n.type === 'text' && n.text) {
         const dt = defaultsFor('text');
         const t = { content: n.text.content };
@@ -1479,7 +1497,7 @@ window.Folio = window.Folio || {};
       if (n.visible === false) o.visible = false;
       if (n.locked) o.locked = true;
       if (n.type === 'frame' && n.children && n.children.length) {
-        if (d >= maxDepth || count >= maxNodes) o.childCount = n.children.length;
+        if (d >= maxDepth || count >= maxNodes || folded) o.childCount = n.children.length;
         else {
           o.children = [];
           for (let i = 0; i < n.children.length; i++) {
@@ -1680,6 +1698,8 @@ window.Folio = window.Folio || {};
 
   function afterMutation(changedIds, selectIds, createdRoots) {
     const store = S();
+    const C = comps();
+    if (C) C.flush(); // propagate edited mains now, so results and screenshots show the instances updated
     const sel = (selectIds || changedIds).filter((id) => store.get(id));
     if (sel.length) store.select(sel);
     reveal(changedIds, createdRoots);
@@ -1721,7 +1741,7 @@ window.Folio = window.Folio || {};
             if (!c) return null;
             const k = c.type === 'frame' && c.children.length ? ` (${c.children.length} children)` : '';
             const t = c.type === 'text' ? ` ${q(String(c.text && c.text.content).replace(/\s+/g, ' ').slice(0, 40))}` : '';
-            return `${c.id} ${c.type} ${q(c.name)}${t}${k}`;
+            return `${c.id} ${c.type} ${q(c.name)}${t}${k}${compTag(c)}`;
           }).filter(Boolean);
           if (n.children.length > 40) o.children.push(`…${n.children.length - 40} more`);
           o.layerCount = store.descendants(n.id).length;
@@ -1737,6 +1757,11 @@ window.Folio = window.Folio || {};
     const brief = brandBrief();
     out.brand = brief || null;
     if (!brief && brandsAvailable()) out.brandNote = 'No brand kit is active: design freely, and offer to save the look as a kit with set_brand.';
+    const C = comps();
+    if (C && C.list().length) {
+      const names = [...C.sets().map((x) => `${q(x.name)} (${C.list().filter((c) => c.setId === x.id).length} variants)`), ...C.list().filter((c) => !c.setId).map((c) => q(c.name))];
+      out.components = `${names.slice(0, 20).join(', ')}. list_components shows their ids, variants and layer paths.`;
+    }
     if (!artboards.length) out.note = 'The canvas is empty. Create an artboard with create_nodes (parent_id null).';
     return result(out, `Read the document (${artboards.length} artboard${artboards.length === 1 ? '' : 's'})`, []);
   }
@@ -1783,6 +1808,8 @@ window.Folio = window.Folio || {};
         index = store.siblingsOf(parent.id).indexOf(parent.id) + 1;
         parent = host;
       }
+      if (parent && instanceScope(parent.id))
+        return fail(`${q(parent.name)} (${parent.id}) is part of an instance, and instances follow their main component, so layers can't be added inside them. Add the layers to the main${parent.sourceId ? ' (' + parent.sourceId + ')' : ''} to change every instance, or detach this instance first (update_instances with "detach": true). Nothing was created.`, 'Cannot add inside an instance');
     }
     const pid = parent ? parent.id : null;
     const info = {
@@ -1933,6 +1960,14 @@ window.Folio = window.Folio || {};
           }
         });
       }
+      const sc = instanceScope(node.id);
+      if (sc) {
+        const part = overridablePart(node, patch, sc.root);
+        if (part.dropped.length)
+          ctx.warn(`${part.dropped.join(', ')} not changed: this layer is part of an instance, so only overrides apply (text content and colour, fills, border colour, image src/fit, visible${sc.root ? '; the instance root also owns name, position, size and sizing' : ''}). Use update_instances to switch variants, or edit the main${node.sourceId ? ' (' + node.sourceId + ')' : ''} to change every instance`);
+        Object.keys(patch).forEach((k) => delete patch[k]);
+        Object.assign(patch, part.patch);
+      }
       if (node.type === 'frame' && patch.layout && patch.layout.mode === 'none' && node.layout && node.layout.mode === 'flex' && node.children.length) freezeChildPositions(node, patch);
       if (patch.text && patch.text.weight != null && !patch.text.font) patch.text.weight = snapWeight(node.text && node.text.font, patch.text.weight, ctx);
       if (!Object.keys(patch).length) {
@@ -1979,7 +2014,22 @@ window.Folio = window.Folio || {};
       else if (!targets.includes(r.node.id)) targets.push(r.node.id);
     });
     // skip nodes whose ancestor is also being deleted
-    const top = targets.filter((id) => !targets.some((o) => o !== id && store.isAncestor(o, id)));
+    const top0 = targets.filter((id) => !targets.some((o) => o !== id && store.isAncestor(o, id)));
+    // layers inside an instance follow the main, so they are hidden instead of removed
+    const hidden = top0.filter((id) => {
+      const sc = instanceScope(id);
+      return sc && !sc.root;
+    });
+    hidden.forEach((id) => store.update(id, { visible: false }));
+    if (hidden.length) notes.push(`${hidden.map((id) => q(store.get(id).name)).join(', ')} ${hidden.length === 1 ? 'is' : 'are'} part of an instance, so ${hidden.length === 1 ? 'it was' : 'they were'} hidden instead of deleted (visible false is an override). Delete ${hidden.length === 1 ? 'it' : 'them'} in the main component to remove ${hidden.length === 1 ? 'it' : 'them'} from every instance`);
+    const top = top0.filter((id) => !hidden.includes(id));
+    const C = comps();
+    if (C) {
+      const counts = instanceCounts();
+      C.list().forEach((c) => {
+        if (counts[c.id] && top.some((id) => id === c.mainId || store.isAncestor(id, c.mainId))) notes.push(`${q(c.name)} was a main component: its ${counts[c.id]} instance${counts[c.id] === 1 ? '' : 's'} became plain layers`);
+      });
+    }
     const names = top.map((id) => store.get(id).name);
     let count = 0;
     top.forEach((id) => (count += 1 + store.descendants(id).length));
@@ -1988,11 +2038,13 @@ window.Folio = window.Folio || {};
       if (lastFit && !store.get(lastFit.root)) lastFit = null;
       store.emit('ai:changed', top.slice());
     }
+    if (hidden.length) afterMutation(hidden, []);
     const out = { deleted: top, layersRemoved: count };
+    if (hidden.length) out.hidden = hidden;
     if (errors.length) out.errors = errors;
     if (notes.length) out.notes = notes;
-    const summary = top.length === 1 ? `Deleted ${q(names[0])}` : `Deleted ${top.length} layers`;
-    return result(out, top.length ? summary : 'Nothing deleted', top, !top.length);
+    const summary = top.length === 1 ? `Deleted ${q(names[0])}` : top.length ? `Deleted ${top.length} layers` : `Hid ${hidden.length} layer${hidden.length === 1 ? '' : 's'}`;
+    return result(out, top.length || hidden.length ? summary : 'Nothing deleted', top.concat(hidden), !top.length && !hidden.length);
   }
 
   function moveNodes(input) {
@@ -2011,6 +2063,8 @@ window.Folio = window.Folio || {};
       const r = resolve(m.id, notes);
       if (r.error) return errors.push(r.error);
       const node = r.node;
+      const sc = instanceScope(node.id);
+      if (sc && !sc.root) return errors.push(`${q(node.name)} is part of the instance ${sc.instanceId}, whose layers follow the main component. Move it in the main${node.sourceId ? ' (' + node.sourceId + ')' : ''} instead, or detach the instance first`);
       let pid = m.parent_id !== undefined ? m.parent_id : m.parentId;
       if (pid === undefined) pid = node.parent; // reorder in place
       if (pid === '' || pid === 'null' || pid === 'canvas') pid = null;
@@ -2022,6 +2076,7 @@ window.Folio = window.Folio || {};
         if (parent.id === node.id) return errors.push(`cannot move ${q(node.name)} into itself`);
         if (store.isAncestor(node.id, parent.id)) return errors.push(`cannot move ${q(node.name)} into ${q(parent.name)} because ${q(parent.name)} is inside it`);
         if (parent.type !== 'frame') return errors.push(`${q(parent.name)} is a ${parent.type}; only frames can hold children`);
+        if (instanceScope(parent.id)) return errors.push(`cannot move ${q(node.name)} into ${q(parent.name)}: it is part of an instance, and instances follow their main component. Add it to the main${parent.sourceId ? ' (' + parent.sourceId + ')' : ''} instead, or detach the instance first`);
       }
       const before = rectOf(node.id);
       const list = parent ? parent.children : store.doc.roots;
@@ -3041,7 +3096,14 @@ window.Folio = window.Folio || {};
       if (!isObj(raw[key])) return ctx.warn(`override for ${q(key)} must be a partial layer like {"text": {"content": "…"}} — ignored`);
       const prevAt = ctx.at;
       ctx.at = (prevAt ? prevAt + ' ' : '') + (path || '(root)');
-      const patch = sanitizeProps(raw[key], n.type, ctx, n);
+      // accept the dotted form tool results show ({"text.content": "…"}) as well as nested objects
+      const nested = {};
+      Object.keys(raw[key]).forEach((k) => {
+        const v = raw[key][k];
+        const dotted = k.includes('.') ? fieldsToPatch([[k, v]]) : { [k]: v };
+        Object.keys(dotted).forEach((t) => (nested[t] = isObj(nested[t]) && isObj(dotted[t]) ? Object.assign({}, nested[t], dotted[t]) : dotted[t]));
+      });
+      const patch = sanitizeProps(nested, n.type, ctx, n);
       const part = overridablePart(n, patch, path === '');
       if (part.dropped.length) ctx.warn(`${part.dropped.join(', ')} can't be overridden (only text content/colour, fills, border colour, image src/fit and visible${path === '' ? ', plus the root\'s name, position, size and sizing' : ''}) — edit the main component or add a variant instead`);
       ctx.at = prevAt;
@@ -3359,7 +3421,6 @@ window.Folio = window.Folio || {};
           C.update(base.id, { name: `${setName} / __0` });
           for (let i = 1; i < combos.length; i++) {
             const id = store.duplicate([base.mainId], 0)[0];
-            delete store.get(id).component; // the copy carries the main's marker; it becomes its own main below
             mains.push(C.create([id], { name: `${setName} / __${i}` }));
           }
         }

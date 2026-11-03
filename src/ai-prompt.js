@@ -403,7 +403,7 @@ ${JSON.stringify(EXAMPLE)}`;
     {
       name: 'get_tree',
       description:
-        'The full JSON of one layer and its descendants, in the same format create_nodes accepts (with ids). Fields equal to their defaults are omitted; "_rendered": [w, h] is the real size of hug/fill layers; "childCount" marks children cut off by depth.',
+        'The full JSON of one layer and its descendants, in the same format create_nodes accepts (with ids). Fields equal to their defaults are omitted; "_rendered": [w, h] is the real size of hug/fill layers; "childCount" marks children cut off by depth. Main components carry "component"; instances carry "instance" {component, variant, overrides} and their inner layers are only listed when node_id is the instance itself (or a layer inside it).',
       input_schema: {
         type: 'object',
         properties: {
@@ -539,12 +539,12 @@ ${JSON.stringify(EXAMPLE)}`;
               name: { type: 'string' },
               colors: {
                 type: ['array', 'object'],
-                description: 'Array of {id?, name?, value?, delete?}, or a map {"primary": "#c2410c", …}. Values are literal colours. Core ids: primary, secondary, accent, background, surface, text, muted.',
+                description: 'Array of {id?, name?, value?, delete?}, or a map {"primary": "#1f4d3a", …}. Values are literal colours. Core ids: primary, secondary, accent, background, surface, text, muted, success, danger.',
                 items: { type: 'object' },
               },
               fonts: {
                 type: ['array', 'object'],
-                description: 'Array of {id?, name?, family?, weight?, delete?}, or a map {"heading": {"family": "Fraunces", "weight": 700}, "body": "DM Sans"}. Core ids: heading, body.',
+                description: 'Array of {id?, name?, family?, weight?, delete?}, or a map {"heading": {"family": "Archivo", "weight": 700}, "body": "DM Sans"}. Core ids: heading, body.',
                 items: { type: 'object' },
               },
               logos: {
@@ -567,6 +567,96 @@ ${JSON.stringify(EXAMPLE)}`;
         required: ['patch'],
         additionalProperties: false,
       },
+    },
+    {
+      name: 'list_components',
+      description:
+        'Every component in the document: variant sets (name, properties and values, and each variant\'s component id, main id and size) and single components, each with an outline of its main\'s layers by name path (the paths overrides use) and how many instances exist. Call it before placing or editing instances.',
+      input_schema: { type: 'object', properties: {}, additionalProperties: false },
+    },
+    {
+      name: 'create_component',
+      description:
+        'Turn existing layers into a main component that instances link to. One frame becomes the main in place; several layers (or a text or image) are wrapped in a hugging frame first. With "variants" (property → values, e.g. {"Style": ["Primary", "Secondary"], "Size": ["M", "L"]}) it builds a variant set: when node_ids has exactly one layer per combination, each layer becomes one variant in order (the first property varies slowest); otherwise the main is duplicated for every combination, and you restyle each variant\'s main with update_nodes. Layers inside an instance cannot become components.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          node_ids: { type: 'array', minItems: 1, items: { type: 'string' }, description: 'Layers to turn into the component (siblings).' },
+          name: { type: 'string', description: 'Component or set name, e.g. "Button".' },
+          variants: { type: 'object', description: 'Optional: property → list of values, e.g. {"Style": ["Primary", "Secondary", "Ghost"]}.', additionalProperties: { type: 'array', items: { type: 'string' } } },
+          description: { type: 'string', description: 'Optional: when to use it.' },
+        },
+        required: ['node_ids', 'name'],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'create_instances',
+      description:
+        'Place instances of components (linked copies that follow their main). component is a component id (k_…), a main id, or a component or set name; variant picks a variant of a set, e.g. {"Style": "Secondary"} (properties you leave out keep the default). parent_id is the frame to add into (null = canvas); index, x and y work as in create_nodes. overrides are keyed by layer name path from list_components, e.g. {"Label": {"text": {"content": "Book a table"}}, "Icon": {"visible": false}}; only text content and colour, fills, border colour, image src/fit and visible can be overridden. name, width, height and sizing set the instance root (e.g. {"sizing": {"w": "fill"}} for cards sharing a row). Returns the new instance ids.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          items: {
+            type: 'array',
+            minItems: 1,
+            items: {
+              type: 'object',
+              properties: {
+                component: { type: 'string' },
+                variant: { type: 'object', additionalProperties: { type: 'string' } },
+                parent_id: { type: ['string', 'null'] },
+                index: { type: 'integer', minimum: 0 },
+                x: { type: 'number' },
+                y: { type: 'number' },
+                overrides: { type: 'object', description: 'Layer path → partial layer with overridable fields.' },
+                name: { type: 'string' },
+                width: { type: 'number' },
+                height: { type: 'number' },
+                sizing: { type: 'object' },
+              },
+              required: ['component', 'parent_id'],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: ['items'],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'update_instances',
+      description:
+        'Change instances: switch the variant ({"Size": "L"}; overrides carry over by layer path), set overrides (same format as create_instances), reset overrides (true for all, or a list of layer paths), or detach (it becomes plain layers that no longer follow the main). Steps run in that order: reset, variant, overrides, detach. To change layout, sizes, fonts or structure, edit the main instead. Use update_nodes on the instance root for its name, position, size and sizing.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          items: {
+            type: 'array',
+            minItems: 1,
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', description: 'Instance root id.' },
+                variant: { type: 'object', additionalProperties: { type: 'string' } },
+                overrides: { type: 'object' },
+                reset: { type: ['boolean', 'array'], items: { type: 'string' } },
+                detach: { type: 'boolean' },
+              },
+              required: ['id'],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: ['items'],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'add_starter_kit',
+      description:
+        'Add a "Components" artboard with ready-made sets that follow the active brand kit: Button (Style Primary/Secondary/Ghost × Size S/M/L), Badge (Tone), Card (with a nested Button), Input (State Default/Focus/Error), Nav bar and Avatar (Size S/M/L). Parts that already exist are kept. Returns the components like list_components.',
+      input_schema: { type: 'object', properties: {}, additionalProperties: false },
     },
   ];
 
@@ -596,6 +686,9 @@ ${JSON.stringify(EXAMPLE)}`;
         /* context is best-effort */
       }
     }
+    const C = Folio.components;
+    const nComps = C && C.list ? C.list().length : 0;
+    if (nComps) lines.push(`Components: ${nComps} (list_components shows them)`);
     const roots = (doc.roots || []).map((id) => store.get(id)).filter(Boolean);
     if (!roots.length) lines.push('Artboards: none yet (the canvas is empty).');
     else {

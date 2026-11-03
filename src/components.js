@@ -1002,7 +1002,7 @@ window.Folio = window.Folio || {};
           Ghost: { fill: null, color: t.ink },
         }[v.Style];
         return F('Button', { dir: 'row', h: s.h, sw: 'hug', pad: [0, s.px, 0, s.px], gap: 8, align: 'center', justify: 'center', radius: t.radius, fill: look.fill }, [
-          T('Label', 'Get started', t, { size: s.size, weight: 600, lh: 1.25, color: look.color }),
+          T('Label', 'Save changes', t, { size: s.size, weight: 600, lh: 1.25, color: look.color }),
         ]);
       },
     },
@@ -1047,8 +1047,9 @@ window.Folio = window.Folio || {};
     {
       name: 'Card',
       main: (t) =>
-        F('Card', { w: 320, pad: [24, 24, 24, 24], gap: 12, radius: t.radiusLg, fill: t.surface, shadows: [shadow(1, 2, 0, '#0000000d'), shadow(4, 12, -2, '#00000014')] }, [
-          F('Media', { sw: 'fill', h: 144, radius: t.radiusMedia, fill: t.subtle }),
+        // border OR shadow: a brand with shadow "none" gets a hairline border instead
+        F('Card', { w: 320, pad: [24, 24, 24, 24], gap: 12, radius: t.radiusLg, fill: t.surface, ...(t.shadowStyle === 'none' ? { border: edge(t.subtle) } : { shadows: [shadow(1, 2, 0, '#0000000d'), shadow(4, 12, -2, t.shadowStyle === 'bold' ? '#00000029' : '#00000014')] }) }, [
+          F('Media', { sw: 'fill', h: 144, radius: t.radiusMedia, fill: t.tints.avatar[0] }),
           T('Title', 'Quarterly report', t, { size: 18, weight: 600, lh: 1.3, sw: 'fill', font: t.heading }),
           T('Body', 'Revenue, churn and pipeline for the last three months, with notes from the finance team.', t, { size: 14, lh: 1.5, sw: 'fill', color: t.muted }),
           F('Actions', { dir: 'row', gap: 8, pad: [4, 0, 0, 0] }),
@@ -1060,14 +1061,15 @@ window.Folio = window.Folio || {};
       props: { Layout: ['Desktop', 'Mobile'] },
       main: (v, t) => {
         const desktop = v.Layout === 'Desktop';
-        const links = ['Product', 'Pricing', 'Customers', 'About'].map((l, i) => T(l, l, t, { size: 14, weight: i ? 400 : 600, color: i ? t.muted : t.ink }));
-        return F('Nav bar', { dir: 'row', w: desktop ? 1040 : 390, h: 64, pad: [0, desktop ? 32 : 16, 0, desktop ? 32 : 16], align: 'center', justify: 'space-between', fill: t.surface, shadows: [shadow(1, 0, 0, '#0000001a')] }, [
-          F('Logo', { dir: 'row', gap: 8, align: 'center' }, [F('Mark', { w: 24, h: 24, radius: 6, fill: t.primary }), T('Name', t.brandName || 'Northwind', t, { size: 16, weight: 700, font: t.heading })]),
+        const links = ['Services', 'Work', 'About', 'Journal'].map((l, i) => T(l, l, t, { size: 14, weight: i ? 400 : 600, color: i ? t.muted : t.ink }));
+        return F('Nav bar', { dir: 'row', w: desktop ? 1040 : 390, h: 64, gap: 16, pad: [0, desktop ? 32 : 16, 0, desktop ? 32 : 16], align: 'center', justify: 'space-between', fill: t.surface, shadows: [shadow(1, 0, 0, '#0000001a')] }, [
+          // on mobile the logo takes the leftover width and clips, so long brand names never collide with "Menu"
+          F('Logo', { dir: 'row', gap: 8, align: 'center', ...(desktop ? {} : { sw: 'fill', clip: true }) }, [F('Mark', { w: 24, h: 24, radius: 6, fill: t.primary }), T('Name', t.brandName || 'Northwind', t, { size: 16, weight: 700, font: t.heading })]),
           desktop ? F('Links', { dir: 'row', gap: 32, align: 'center' }, links) : T('Menu', 'Menu', t, { size: 14, weight: 500 }),
           F('Action', { dir: 'row' }),
         ]);
       },
-      nested: [{ at: 'Action', component: 'Button', variant: { Style: 'Primary', Size: 'S' }, overrides: { Label: { text: { content: 'Start free trial' } } } }],
+      nested: [{ at: 'Action', component: 'Button', variant: { Style: 'Primary', Size: 'S' }, overrides: { Label: { text: { content: 'Contact us' } } } }],
     },
   ];
   const KIT_BOARD = (t) => F('Components', { gap: 56, pad: [64, 64, 64, 64], fill: t.page });
@@ -1117,6 +1119,7 @@ window.Folio = window.Folio || {};
     return {
       ...L,
       brandName: b.name,
+      shadowStyle: (b.style && b.style.shadow) || 'soft',
       page: 'var(--color-background)',
       surface: 'var(--color-surface)',
       subtle,

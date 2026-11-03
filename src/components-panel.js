@@ -343,11 +343,12 @@ window.Folio = window.Folio || {};
     store.commit('Rename component set');
   }
 
-  /** Replace `el`'s text with an input; Enter/blur saves, Esc cancels. */
+  /** Edit `el`'s text in an input (placed after its button: inputs inside buttons get clicked by Space/Enter). */
   function inlineRename(el, value, onDone) {
-    const input = h('input', { class: 'f-input bp-inline', value: value || '', spellcheck: 'false', 'aria-label': 'New name' });
-    const prev = Array.from(el.childNodes);
-    el.replaceChildren(input);
+    const input = h('input', { class: 'f-input bp-inline kp-rename', value: value || '', spellcheck: 'false', 'aria-label': 'New name' });
+    const host = el.closest('button') || el;
+    el.hidden = true;
+    host.after(input);
     busy = true;
     let done = false;
     const finish = (ok) => {
@@ -355,7 +356,8 @@ window.Folio = window.Folio || {};
       done = true;
       busy = false;
       const v = input.value.trim();
-      el.replaceChildren(...prev);
+      input.remove();
+      el.hidden = false;
       if (ok && v && v !== value) onDone(v);
       else if (dirty) render();
     };
@@ -364,7 +366,7 @@ window.Folio = window.Folio || {};
       if (e.key === 'Enter') finish(true);
       if (e.key === 'Escape') finish(false);
     });
-    ['click', 'pointerdown'].forEach((t) => input.addEventListener(t, (e) => e.stopPropagation()));
+    input.addEventListener('pointerdown', (e) => e.stopPropagation());
     input.addEventListener('blur', () => finish(true));
     requestAnimationFrame(() => {
       input.focus();
@@ -396,27 +398,24 @@ window.Folio = window.Folio || {};
     return out;
   }
 
-  /** Default placement: inside the selected frame (or the selected layer's frame), else centred in the view. */
+  /** Default placement: inside the selected frame (or the selected layer's frame), else as if dropped at the view centre. */
   function defaultPlace(compId, size) {
-    const C = Folio.canvas;
     const p = store.primary();
     let parentId = p ? (p.type === 'frame' ? p.id : p.parent) : null;
     while (parentId && dropBlocked(parentId, [], compId)) parentId = store.get(parentId).parent;
-    const out = { parentId: parentId || null };
-    const pn = parentId && store.get(parentId);
-    if (pn && pn.layout && pn.layout.mode === 'flex') return out;
-    if (pn) {
-      const pb = layoutBox(parentId);
-      const bw = (pn.style && pn.style.border && pn.style.border.width) || 0;
-      out.x = Math.max(0, Math.round((pb.width - 2 * bw - size.width) / 2));
-      out.y = Math.max(0, Math.round((pb.height - 2 * bw - size.height) / 2));
-      return out;
+    if (!parentId) {
+      const r = vpEl().getBoundingClientRect();
+      return dropAt(r.left + r.width / 2, r.top + r.height / 2, compId, size);
     }
-    const v = vpEl();
-    const w = C.screenToWorld(v.clientWidth / 2, v.clientHeight / 2);
-    out.x = Math.round(w.x - size.width / 2);
-    out.y = Math.round(w.y - size.height / 2);
-    return out;
+    const pn = store.get(parentId);
+    if (pn.layout && pn.layout.mode === 'flex') return { parentId };
+    const pb = layoutBox(parentId);
+    const bw = (pn.style && pn.style.border && pn.style.border.width) || 0;
+    return {
+      parentId,
+      x: Math.max(0, Math.round((pb.width - 2 * bw - size.width) / 2)),
+      y: Math.max(0, Math.round((pb.height - 2 * bw - size.height) / 2)),
+    };
   }
 
   function insert(compId, at) {

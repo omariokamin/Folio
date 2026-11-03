@@ -238,3 +238,16 @@ _Done in v0.2: the AI designer (✦ AI tab, API key) and the Claude Code connect
 - **HTML import.** Paste an existing web page or snippet and turn it into editable layers.
 - More: design tokens / colour styles, a grid and snapping, comments, version history, video
   export of simple animations.
+
+---
+
+## Credits
+
+- **Design principles.** The rules Claude follows when it designs in Folio
+  ([docs/design-principles.md](docs/design-principles.md)) are paraphrased from four MIT-licensed
+  design-skill projects: [anti-slop](https://github.com/miqdadbadjuber/anti-slop) by miqdadbadjuber,
+  [taste-skill](https://github.com/Leonxlnx/taste-skill) by Leonxlnx,
+  [ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) by nextlevelbuilder
+  and [logo-design-skill](https://github.com/kaankiziltug/logo-design-skill) by kaankiziltug.
+- **Coding rules for agents.** [Ponytail](https://github.com/DietrichGebert/ponytail) by
+  DietrichGebert (MIT; see `third_party/ponytail-LICENSE`), used in `AGENTS.md`.

@@ -184,7 +184,9 @@ window.Folio = window.Folio || {};
       const pi = path.indexOf(n.parent);
       if (pi >= 0 && path[pi + 1]) return path[pi + 1];
     }
-    return path[1] || path[0];
+    const t = path[1] || path[0];
+    // an instance on the canvas is picked as a whole (double-click goes inside, like a frame)
+    return inInstance(t) ? path.find((id) => store.get(id).instance) || t : t;
   }
 
   // ---------- viewport ----------
@@ -346,7 +348,7 @@ window.Folio = window.Folio || {};
     const deep = e.metaKey || e.ctrlKey;
     const target = clickTarget(path, deep);
     const n = store.get(target);
-    if (!deep && store.isRoot(target) && n.type === 'frame' && n.children.length && !store.selection.includes(target)) {
+    if (!deep && store.isRoot(target) && n.type === 'frame' && n.children.length && !n.instance && !store.selection.includes(target)) {
       // pressing an artboard's empty area: click selects it, drag marquee-selects inside it
       return startMarquee(e, target, target);
     }

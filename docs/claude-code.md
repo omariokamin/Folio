@@ -126,6 +126,19 @@ previous colours").
   `localhost:4317` tab has its own list, so use **Export .json** / **Import .json** in the Brand tab
   to move a kit between browsers or computers.
 
+**Components.** For things that repeat, such as buttons, cards and nav bars, Claude makes one
+**main component** and places linked copies (**instances**) of it.
+
+- *Ask for a starter set*: "Add the starter components." Claude adds a **Components** artboard
+  with buttons, badges, a card, inputs, a nav bar and avatars in your brand kit's colours and fonts.
+- *Change one, change all*: "Make the main button rounder" edits the main component, and every
+  button in your designs updates.
+- *Variants*: one component can come in versions, for example Style (Primary, Secondary, Ghost)
+  and Size (S, M, L). "Make that button the secondary style" switches the variant.
+- Each copy can have its own text, colours, image and visibility. Layout and sizes come from the
+  main, so for a copy that looks different Claude adds a variant. To change a single copy
+  completely, ask Claude to **detach** it so it becomes ordinary layers.
+
 **Your work is saved in the browser.** Folio autosaves in the browser tab at `localhost:4317`.
 That copy is separate from the one you get by double-clicking `index.html`, so use
 **File → Save to file** to keep a `.folio.json` file you can open anywhere.

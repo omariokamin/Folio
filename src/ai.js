@@ -68,6 +68,11 @@ window.Folio = window.Folio || {};
     screenshot: 'Taking a screenshot',
     get_brand: 'Reading the brand kit',
     set_brand: 'Updating the brand kit',
+    list_components: 'Reading the components',
+    create_component: 'Making a component',
+    create_instances: 'Placing components',
+    update_instances: 'Updating instances',
+    add_starter_kit: 'Adding the starter kit',
   };
 
   const store = Folio.store;
