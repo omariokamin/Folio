@@ -328,3 +328,55 @@ Deleting a main (store.remove) → its instances are detached (become plain laye
 - Canvas: main component artboard label/outline in purple; instance internals are not valid drop targets;
   double-click still edits instance text (text.content is overridable).
 - Shortcuts: ⌥⌘K create component, ⌥⌘B detach instance.
+
+---
+
+## Logo designer (v0.5)
+
+Claude drafts logos as **SVG** (real vectors), tests them on a "Logo concepts" artboard, and saves the chosen
+one to the active brand kit with automatic versions. Users can also save any selected Folio frame as a logo.
+
+### `src/svg.js` → `Folio.svg` (shared by the AI tools and the brand panel)
+- `sanitize(markup)` → `{ svg, warnings }`; throws an Error with a plain message when unusable. Parse with
+  DOMParser (`image/svg+xml`). Root must be `<svg>` with a `viewBox` (add one from width/height if missing).
+  Whitelist elements: svg, g, path, rect, circle, ellipse, line, polyline, polygon, text, tspan, defs,
+  linearGradient, radialGradient, stop, clipPath, mask, use (internal `#id` only), title, desc.
+  Whitelist presentation attributes (fill, stroke, stroke-width, stroke-linecap/linejoin, opacity, fill-opacity,
+  stroke-opacity, fill-rule, clip-rule, transform, d, x, y, x1…y2, cx, cy, r, rx, ry, width, height, points,
+  offset, stop-color, stop-opacity, gradientUnits, gradientTransform, font-family, font-size, font-weight,
+  letter-spacing, text-anchor, dominant-baseline, clip-path, mask, id, viewBox, xmlns, href/xlink:href (only `#…`)).
+  Drop everything else: scripts, `on*`, `<style>`, `style=` (convert simple style props to attributes if easy),
+  foreignObject, images, external `url(...)`/hrefs. Max 200 KB input. Paint values may be colours, `none`,
+  `currentColor` or internal `url(#id)`; brand tokens `var(--color-x)` are resolved to literals via `Folio.brand`.
+- `embedFonts(svg)` → `Promise<svg>`: for every font-family used by `<text>`, inline a `@font-face` (font file as
+  data URL, latin subset is fine) inside `<defs><style>`, so wordmarks render correctly inside `<img>`, in exports
+  and in other browsers. Reuse the exporter's Google Fonts embedding code (refactor it into a shared helper rather
+  than copying). On network failure: return the svg unchanged with a warning.
+- `recolor(svg, fn)` → new svg where every paint (fill, stroke, stop-color) is replaced by `fn(colour)`.
+- `versions(svg, brand?)` → `{ 'on-light': svg, 'on-dark': svg, 'mono': svg }`:
+  on-dark maps dark paints (luminance < 0.35) to `#ffffff` (or the brand's background if the brand ground is dark)
+  and keeps brand accents; mono maps every paint to one colour (brand text colour, else `#111111`).
+- `toDataUrl(svg)` (`data:image/svg+xml;charset=utf-8,` + encodeURIComponent), `size(svg)` → `{width, height}` from viewBox.
+- `fromNode(nodeId)` → `Promise<svg>`: a Folio frame/image as SVG (html-to-image `toSvg` with embedded fonts; or the
+  image's own SVG when it already is one). Used by "Save selection as logo".
+
+### Brand kit logos
+- A logo may carry `version: 'on-light' | 'on-dark' | 'mono' | 'symbol'` and `group: '<id>'` linking the versions of
+  one logo. `Folio.brand` accepts internally generated `data:image/svg+xml` srcs (already sanitized) via
+  `addLogoSrc`; the model-facing `set_brand` keeps refusing data URLs (logos go through `save_logo`).
+- Brand panel Logos section: versions of one group shown together with labels; button **Save selection as logo**
+  (selected frame or image → `fromNode` → sanitize → versions → logos) and per-group **Make versions**.
+
+### AI tools (appended at the END of the tool list)
+- `draft_logo` `{ name, svg, concept }` → sanitize + embedFonts → adds a concept card to the "Logo concepts" artboard
+  (created on demand, 1440 wide, hug height, flex row wrap, neutral ground): the logo large on white, the same at
+  64/32/16 px tall on white and on near-black, and a caption (name + one-sentence concept). Returns the card id and
+  the image node id. Claude screenshots the artboard to judge the drafts.
+- `save_logo` `{ node_id | svg, name, symbol_svg? }` → adds the logo with versions (on-light, on-dark, mono, and symbol
+  when given) to the active brand kit (create a minimal kit from the name if none is active, and say so). Returns the
+  logo ids to use as `brand-logo:<id>`.
+- Prompt: a "Logo design" section — only when the user asks; process from docs/design-principles.md §5 (brief →
+  category clichés → 8–12 one-line concepts → the three most different → draft in black first → test small and
+  reversed → present three with a recommendation and wait for the choice → colour + save_logo); SVG authoring rules
+  (viewBox, simple geometry, few anchor points, consistent strokes, text only in fonts from the list, no effects,
+  details no smaller than 1/48 of the mark); red flags; suggest a trademark search before real use.
