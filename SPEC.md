@@ -245,3 +245,86 @@ brand = {
   (`brand-logo:` → logo src), `colorRef(id)` → `"var(--color-id)"`, `fontRef(id)`.
 - `detach(tokenString)` replaces every use in the document with its literal value (used before deleting a custom colour/font).
 - Store event `'brand'` fires whenever the active brand or its contents change.
+
+---
+
+## Components & variants (v0.4)
+
+Same model as professional design tools: a **main component** lives on the canvas; **instances** are real
+layers linked to it. Instances are ordinary nodes in `doc.nodes`, so rendering, export, layers and the
+canvas need no special drawing code.
+
+### Data (stored in the document → saved files and undo carry everything)
+```
+doc.components = { [compId]: { id: 'k_ab12', name: 'Button', mainId: '<node id>', setId: 's_ab12' | null,
+                               variant: { Style: 'Primary', Size: 'M' } | {}, description: '',
+                               snapshot: <tree of the main at the last propagation, see toTree> } }
+doc.componentSets = { [setId]: { id, name: 'Button', frameId: '<node id of the set container frame>',
+                                 props: { Style: ['Primary','Secondary','Ghost'], Size: ['S','M','L'] } } }
+node.component = compId            // on the ROOT of a main component
+node.instance  = { componentId }   // on the ROOT of an instance
+node.sourceId  = '<main node id>'  // on every node inside an instance (root included), pointing at its counterpart in the main
+```
+- A component **set** is a frame (flex row, wrap, gap 24, dashed purple border, padding 24) that contains one
+  main per variant. Variant mains are named like `Style=Primary, Size=M`.
+- Mains usually live in an artboard called "Components" (the starter kit creates it), but any frame can become one.
+
+### Overrides (decided by diff, not by tracking edits)
+Overridable fields on instance nodes: `text.content`, `text.color`, `style.fills`, `style.border.color`,
+`image.src`, `image.fit`, `visible`. The instance ROOT additionally owns `x, y, width, height, sizing, name`.
+Everything else (layout, padding, gap, fonts, sizes of inner layers, radius, shadows, structure) follows the main.
+
+**Propagation** (when a main or anything inside it changes): for each instance node, for each overridable
+field: if `instanceValue !== snapshotValue` (deep-equal) it is an **override** → keep it; otherwise take the
+new main value. Non-overridable fields always take the new main value. Then the snapshot is updated.
+Structure: reuse instance nodes by `sourceId` (ids stay stable), create nodes for new main children, delete
+nodes whose source vanished, keep main child order.
+
+**Nested instances** (e.g. a Button instance inside the Card main): only instances whose root has no
+instance-root ancestor are "direct" and get propagated from their component. Instances that sit inside
+another instance's subtree ride along with the outer component (they keep `instance`, but are treated as
+part of the outer instance; variant switching on them is disabled in v0.4). Propagation must run
+inner-first (Button → Card main → Card instances) and must terminate (no cycles: a component may not
+contain an instance of itself, directly or indirectly — refuse with a clear message).
+
+Deleting a main (store.remove) → its instances are detached (become plain layers) with a toast; undo restores.
+
+### `Folio.components` (src/components.js) — API
+- `init()`; listens to store `'change'` (debounced ~100 ms) and propagates mains whose subtree differs
+  from their snapshot. **Wrap `Folio.store.commit` so pending propagation is flushed synchronously first.**
+  `flush()` is public. After `'history'` / `'doc'`, don't re-propagate needlessly (snapshots are in the doc).
+- Queries: `list()`, `sets()`, `get(compId)`, `getSet(setId)`, `componentOf(nodeId)` (comp if node is a main
+  root), `mainRootOf(nodeId)` (main root id if the node is a main or inside one), `instanceRootOf(nodeId)`
+  (nearest ancestor-or-self with `instance`), `isDirectInstance(nodeId)`, `isOverridable(field, isRoot)`,
+  `overridesOf(instanceId)` → `{ '<name path>': { 'text.content': 'Buy now', ... } }`, `pathOf(nodeId)` (name
+  path relative to its instance/main root, e.g. `Content/Label`), `variantsOf(compId)`.
+- Mutations (emit `'change'` + `'components'`; never commit — callers commit):
+  - `create(nodeIds, { name })` → comp. One frame → becomes the main in place; several nodes or a non-frame →
+    wrapped in a hug flex frame first. Refuses nodes inside an instance.
+  - `createInstance(compId, { parentId, index, x, y, overrides })` → instance root id. Default placement:
+    inside the selected frame, else to the right of the main. `overrides` keyed by name path:
+    `{ 'Label': { text: { content: 'Buy now' } }, 'Icon': { visible: false } }` (only overridable fields applied).
+  - `setOverrides(instanceId, overrides)`, `resetOverrides(instanceId, path?)`, `detach(instanceId)`.
+  - Variants: `addVariant(compId, variantProps)` (creates the set if needed and duplicates the main into it),
+    `combineAsVariants(compIds, { name, prop })`, `setSetProps(setId, props)`, `setVariantOf(compId, variant)`,
+    `setVariant(instanceId, variantPatch)` → swaps the instance to the matching variant main, carrying
+    overrides over by name path.
+  - `addStarterKit()` → builds (or updates) a "Components" artboard with sets: **Button** (Style
+    Primary/Secondary/Ghost × Size S/M/L), **Badge** (Tone Neutral/Accent/Success), **Card** (with a nested
+    Button instance), **Input** (State Default/Focus/Error), **Nav bar**, **Avatar** (Size S/M/L). Uses brand
+    tokens (`var(--color-primary)`, `var(--font-body)`, `var(--radius-md)`, …) when a brand is active, tasteful
+    literals otherwise. Returns created comp ids.
+- Store event `'components'` fires when the registry changes.
+
+### UI rules (src/components-panel.js, inspector, layers, canvas)
+- Left panel third tab **Components**: search, list of sets/components with live thumbnails, click = insert
+  instance, drag onto canvas = place, "Add starter kit" button, per-item menu (go to main, rename, delete).
+- Inspector: main → "Main component" section (name, description, variant props editor, Add variant);
+  instance → "Instance" section (component name + "Go to main", variant dropdowns per prop, list of overrides
+  with reset, Reset all, Detach). For nodes inside an instance, non-overridable sections are read-only with
+  a hint "Edit the main component to change this".
+- Layers: main = filled purple diamond icon + purple name; instance = outlined diamond; nodes inside an instance
+  shown in purple-ish tint. Deleting a child inside an instance sets `visible:false` instead.
+- Canvas: main component artboard label/outline in purple; instance internals are not valid drop targets;
+  double-click still edits instance text (text.content is overridable).
+- Shortcuts: ⌥⌘K create component, ⌥⌘B detach instance.
