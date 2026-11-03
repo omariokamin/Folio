@@ -234,13 +234,11 @@ adds its piece to a single global object, `window.Folio`.
 
 ## Ideas for next steps
 
-_Done in v0.2: the AI designer (✦ AI tab, API key) and the Claude Code connection (MCP, Claude subscription)._
+_Done so far: the AI designer and Claude Code connection (v0.2), brand kits (v0.3), components and variants (v0.4), the logo designer (v0.5) and pages (v0.6)._
 
-- **Components.** Make a button once, reuse it everywhere, and update every copy at once.
 - **Tailwind export.** Turn the CSS of each layer into Tailwind utility classes.
-- **Multiple pages** in one document (for example "Website", "Social", "Ideas").
 - **HTML import.** Paste an existing web page or snippet and turn it into editable layers.
-- More: design tokens / colour styles, a grid and snapping, comments, version history, video
+- More: a grid and snapping, comments, version history, video
   export of simple animations.
 
 ---

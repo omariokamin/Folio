@@ -1357,9 +1357,13 @@ window.Folio = window.Folio || {};
     try {
       if (!Folio.render || !Folio.render.el) return null;
       if (Folio.render.sync) Folio.render.sync();
-      const el = Folio.render.el(id);
-      if (!el || !el.isConnected || !el.getClientRects().length) return null;
-      return [Math.round(el.offsetWidth), Math.round(el.offsetHeight)];
+      const measure = () => {
+        const el = Folio.render.el(id);
+        if (!el || !el.isConnected || !el.getClientRects().length) return null;
+        return [Math.round(el.offsetWidth), Math.round(el.offsetHeight)];
+      };
+      // layers on hidden pages have no layout; peek lays their artboard out just long enough to measure
+      return measure() || (Folio.render.peek ? Folio.render.peek([id], measure) : null);
     } catch (e) {
       return null;
     }
