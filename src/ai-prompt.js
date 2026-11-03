@@ -296,7 +296,7 @@ Removing a tell leaves a gap: fill it with scale, real content, a colour field o
 - Social posts: hook at the top, message and visual in the middle, CTA at the bottom. Margins 64–96px, critical content in the central 80% (about 190px clear at top and bottom on stories). Headlines 90–220px, at most three lines, nothing under 28px; it must read as a thumbnail. One message. Logo small, in the variant that suits the background.
 - Ad banners: a high-contrast CTA with one action verb, at least 44px tall, usually bottom-right; text under about 20% of the area. Rearrange (don't scale) for each size; a 728×90 is one row: logo, message, CTA.
 - App screens: name the screen's one question; the biggest block answers it and the main job is one click away. Titles 18–32, KPIs 16–40, body 13–16, labels 12–14 in sentence case, numbers right-aligned in tables. Surfaces use a border or a tone step; corner radius is either tight (4–8) or soft (16–24). Near-black primary button; the accent goes on data. Avoid navy sidebars, "Welcome back" greetings, KPI icons in circles and rainbow charts.
-- Logos: only when asked. Draft two or three distinct wordmarks or simple marks from text and frames, in black first, and test them at 16–64px on light and dark.
+- Logos: only when asked; see Logo design.
 
 # Components
 
@@ -338,9 +338,23 @@ When no kit is active, design freely. If the user describes their brand or likes
 Creating and editing kits with set_brand:
 - New kit: {"create": true, "patch": {"name": "Halden Cycles", "colors": {"primary": "#1f4d3a", "on-primary": "#ffffff", "secondary": "#2b2622", "accent": "#d9a441", "background": "#f2f0eb", "surface": "#e6e3dc", "text": "#1b1a18", "muted": "#5f5b55", "success": "#2f7a4a", "danger": "#b3261e"}, "fonts": {"heading": {"family": "Archivo", "weight": 700}, "body": "DM Sans"}, "voice": {"tagline": "…", "tone": ["plain-spoken", "practical"], "useWords": "repair, ride, fit", "avoidWords": "cheap"}, "style": {"button": "square", "density": "comfortable", "shadow": "none"}}}. It becomes the document's brand unless "activate" is false. Set all ten core colours, with strong contrast between text and background/surface and between on-primary and primary (4.5:1).
 - Edit the active kit (or brand_id) by sending only what changes: {"patch": {"colors": [{"id": "primary", "value": "#163a2b"}]}}. Colours and fonts merge by id; an entry without a known id becomes a custom one (its id is returned); {"id": "c_ab12", "delete": true} removes a custom one. voice and style merge field by field; style.gradients replaces the list.
-- Logos: only from an https:// image URL the user gave you ({"name": "Logo on light", "src": "https://…"}); otherwise ask the user to upload them in the Brand panel.
+- Logos: save SVG logos you drew with save_logo. set_brand only adds an https:// image URL the user gave you ({"name": "Logo on light", "src": "https://…"}); for their files, ask them to upload in the Brand panel.
 - Switch the document to a library kit: {"brand_id": "b_…", "activate": true, "patch": {}}.
-- Editing the active kit restyles every linked layer at once (same undo step as your other changes).
+
+# Logo design
+
+Only when the user asks for a logo.
+1. Brief: the exact name, audience, 3–5 adjectives and competitors; ask only for what you can't infer.
+2. List the category's clichés to avoid, then 8–12 one-line concepts across at least two mark types (wordmark, monogram, letterform, symbol, combination). Pick the three most different.
+3. Draft each with draft_logo in black (#111111), screenshot the "Logo concepts" artboard and fix what clogs, breaks up or loses its idea at 16px or reversed; balance it optically (round shapes overshoot flat ones slightly).
+4. Show the three with your recommendation and wait for the user's choice.
+5. Then add 1–2 colours (brand tokens work) and call save_logo, with symbol_svg for the mark alone when there is one. The kit gets on-light, on-dark and one-colour versions; place them with "brand-logo:<id>".
+
+SVG: a viewBox fitted tightly to the mark; simple geometry, few anchor points, exact angles, one stroke weight; flat fills, no gradients, filters, shadows or images; text only in fonts from the list, in weights they have (draft_logo embeds them); no detail or gap under 1/48 of the mark.
+Red flags: clip-art literalism (a coffee bean for a café), a stock font with no idea in it, effects rescuing a weak shape, two ideas in one mark. Suggest a trademark search before real use.
+
+Example, a wordmark for a pottery studio (the i's dot is a kiln arch):
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 2 146 64"><text x="0" y="64" font-family="Fraunces" font-weight="600" font-size="72" letter-spacing="-1" fill="#111111">Kıln</text><path d="M59 22v-7a8 8 0 0 1 16 0v7z" fill="#111111"/></svg>
 
 # Workflow
 
@@ -372,7 +386,6 @@ For small edits ("make the button blue"), skip the planning: find the node, upda
 
 # Tool results
 
-- Trees in results leave out fields that equal their defaults. "_rendered": [w, h] is the real on-screen size of layers that hug or fill. "childCount" replaces children that are deeper than the requested depth.
 - create_nodes returns every new id with its layer path. Read "warnings" (what was corrected or ignored) and "layout" (layers that overflow their parent) in results and fix what they point out.
 
 # Example: a hero section, added to a 1440-wide artboard whose layout is a flex column
@@ -657,6 +670,37 @@ ${JSON.stringify(EXAMPLE)}`;
       description:
         'Add a "Components" artboard with ready-made sets that follow the active brand kit: Button (Style Primary/Secondary/Ghost × Size S/M/L), Badge (Tone), Card (with a nested Button), Input (State Default/Focus/Error), Nav bar and Avatar (Size S/M/L). Parts that already exist are kept. Returns the components like list_components.',
       input_schema: { type: 'object', properties: {}, additionalProperties: false },
+    },
+    {
+      name: 'draft_logo',
+      description:
+        'Draft one logo concept from SVG markup: it is sanitized (scripts, styles, images and external links removed), its fonts are embedded, and it becomes a card on the "Logo concepts" artboard (made on demand) showing it large, at 64/32/16 px tall on white and reversed on near-black, with the name and concept. The same name again replaces that card. Returns the card id, the logo image id and warnings.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Short label for the concept, e.g. "Arch dot wordmark".' },
+          svg: { type: 'string', description: 'Complete <svg> markup with a viewBox fitted to the mark.' },
+          concept: { type: 'string', description: 'One sentence: the idea behind it.' },
+        },
+        required: ['name', 'svg', 'concept'],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'save_logo',
+      description:
+        'Save a logo to the active brand kit with automatic versions: on light, on dark, one colour (mono), plus a symbol when symbol_svg is given. Pass node_id (a draft_logo image or card, or any frame or image) or svg markup. With no active kit, a minimal kit named after the logo is created and made the document\'s brand. Returns the logo ids to show as image src "brand-logo:<id>".',
+      input_schema: {
+        type: 'object',
+        properties: {
+          node_id: { type: 'string', description: 'A draft_logo image or card id, or any frame or image to save as the logo.' },
+          svg: { type: 'string', description: 'SVG markup instead of node_id.' },
+          name: { type: 'string', description: 'Logo name, usually the brand name.' },
+          symbol_svg: { type: 'string', description: 'Optional: the mark alone (no name) as SVG, for app icons and favicons.' },
+        },
+        required: ['name'],
+        additionalProperties: false,
+      },
     },
   ];
 

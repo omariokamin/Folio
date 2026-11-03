@@ -930,35 +930,128 @@ window.Folio = window.Folio || {};
     return added;
   }
 
+  const VERSION_LABELS = { 'on-light': 'On light', 'on-dark': 'On dark', mono: 'Mono', symbol: 'Symbol' };
+  const baseLogoName = (l) => String(l.name || 'Logo').replace(/\s+[—–-]\s+(on light|on dark|mono|symbol)$/i, '') || 'Logo';
+
+  /** The sanitized SVG behind a logo, or null (raster / external / broken). */
+  function logoSvg(l) {
+    const text = Folio.svg && Folio.svg.decode(l.src);
+    try {
+      return text ? Folio.svg.sanitize(text).svg : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * Add (or refresh, keeping ids so placed copies stay linked) the on-light / on-dark / mono versions of
+   * `svg` in one group. `base` is an existing logo that becomes the group's on-light version.
+   */
+  function saveVersions(brandId, svg, name, base) {
+    const S = Folio.svg;
+    const group = (base && base.group) || 'g_' + Math.random().toString(36).slice(2, 8);
+    const { width, height } = S.size(svg);
+    const vs = S.versions(svg, B().get(brandId));
+    const logos = B().get(brandId).logos;
+    const fresh = {};
+    const updated = logos.map((l) => {
+      if (base && l.id === base.id) return { ...l, group, version: l.version || 'on-light' };
+      if (base && l.group === group && vs[l.version] && l.version !== 'on-light') {
+        fresh[l.version] = true;
+        return { ...l, src: S.toDataUrl(vs[l.version]), width, height };
+      }
+      return l;
+    });
+    if (base) B().update(brandId, { logos: updated });
+    Object.keys(vs).forEach((v) => {
+      if (fresh[v] || (base && v === 'on-light')) return;
+      B().addLogoSrc(brandId, { name: `${name} — ${VERSION_LABELS[v].toLowerCase()}`, src: S.toDataUrl(vs[v]), width, height, version: v, group });
+    });
+  }
+
+  async function saveSelectionAsLogo(brandId) {
+    const p = store.primary();
+    if (!p || !Folio.svg) return toast('Select a frame, text or image on the canvas first, then save it as a logo.');
+    const warnings = [];
+    try {
+      const raw = await Folio.svg.fromNode(p.id, warnings);
+      const clean = Folio.svg.sanitize(raw);
+      saveVersions(brandId, clean.svg, p.name || 'Logo');
+      commit('save selection as logo');
+      toast(`Saved “${p.name}” as a logo with light, dark and mono versions` + (warnings.length ? ' — ' + warnings[0] : ''), warnings.length ? undefined : 'success');
+    } catch (e) {
+      toast(e.message || 'Could not turn that layer into a logo.', 'error');
+    }
+  }
+
+  function makeVersions(brandId, base) {
+    const svg = logoSvg(base);
+    if (!svg) return toast('Versions can be made from SVG logos only.', 'error');
+    try {
+      saveVersions(brandId, svg, baseLogoName(base), base);
+      commit('make logo versions');
+    } catch (e) {
+      toast(e.message || 'Could not make versions of that logo.', 'error');
+    }
+  }
+
+  function logoTile(b, l, label) {
+    const nameEl = h('span', { class: 'bp-logo__name', title: label ? `${l.name} · double-click to rename` : 'Double-click to rename' }, label || l.name);
+    nameEl.addEventListener('dblclick', () =>
+      inlineEdit(nameEl, l.name, (v) => {
+        B().update(b.id, { logos: B().get(b.id).logos.map((x) => (x.id === l.id ? { ...x, name: v } : x)) });
+        commit('rename logo');
+      })
+    );
+    const canVersion = !label && !l.group && Folio.svg && Folio.svg.decode(l.src);
+    return h(
+      'div',
+      { class: 'bp-logo', dataset: { id: l.id, version: l.version || '' } },
+      h(
+        'button',
+        { type: 'button', class: 'bp-logo__thumb' + (l.version === 'on-dark' ? ' is-dark' : ''), title: `Place “${l.name}” on the canvas`, onClick: () => insertLogo(l) },
+        h('img', { src: l.src, alt: l.name, draggable: 'false' })
+      ),
+      nameEl,
+      canVersion ? iconBtn('layers', 'Make versions (on dark, mono)', () => makeVersions(b.id, l), 'bp-del bp-logo__ver') : null,
+      iconBtn(
+        'x',
+        'Delete logo (placed copies keep the image)',
+        () => {
+          B().removeLogo(b.id, l.id);
+          commit('delete logo');
+        },
+        'bp-del bp-logo__del'
+      )
+    );
+  }
+
   function logosSection(b) {
     const grid = h('div', { class: 'bp-logos' });
+    const groups = new Map();
     b.logos.forEach((l) => {
-      const nameEl = h('span', { class: 'bp-logo__name', title: 'Double-click to rename' }, l.name);
-      nameEl.addEventListener('dblclick', () =>
-        inlineEdit(nameEl, l.name, (v) => {
-          B().update(b.id, { logos: B().get(b.id).logos.map((x) => (x.id === l.id ? { ...x, name: v } : x)) });
-          commit('rename logo');
-        })
-      );
+      const k = l.group || l.id;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(l);
+    });
+    groups.forEach((list, k) => {
+      if (list.length === 1 && !list[0].group) return grid.append(logoTile(b, list[0]));
+      const order = Object.keys(VERSION_LABELS);
+      list.sort((x, y) => order.indexOf(x.version) - order.indexOf(y.version));
+      const base = list.find((l) => l.version === 'on-light') || list[0];
       grid.append(
         h(
           'div',
-          { class: 'bp-logo', dataset: { id: l.id } },
+          { class: 'bp-logo-group', dataset: { group: k } },
           h(
-            'button',
-            { type: 'button', class: 'bp-logo__thumb', title: `Place “${l.name}” on the canvas`, onClick: () => insertLogo(l) },
-            h('img', { src: l.src, alt: l.name, draggable: 'false' })
+            'div',
+            { class: 'bp-logo-group__head' },
+            h('span', { class: 'bp-logo-group__name', title: baseLogoName(base) }, baseLogoName(base)),
+            Folio.svg && Folio.svg.decode(base.src)
+              ? h('button', { type: 'button', class: 'f-btn f-btn--ghost bp-logo-group__make', title: 'Rebuild the on-dark and mono versions from the on-light one', onClick: () => makeVersions(b.id, base) }, 'Make versions')
+              : null
           ),
-          nameEl,
-          iconBtn(
-            'x',
-            'Delete logo (placed copies keep the image)',
-            () => {
-              B().removeLogo(b.id, l.id);
-              commit('delete logo');
-            },
-            'bp-del bp-logo__del'
-          )
+          h('div', { class: 'bp-logo-group__tiles' }, list.map((l) => logoTile(b, l, VERSION_LABELS[l.version] || l.name)))
         )
       );
     });
@@ -970,7 +1063,8 @@ window.Folio = window.Folio || {};
       b.logos.length ? null : h('span', { class: 'bp-drop__hint' }, 'PNG, JPG, WebP or SVG · up to 1.5 MB')
     );
     if (b.logos.length) grid.append(drop);
-    const body = [b.logos.length ? grid : drop];
+    const save = h('button', { type: 'button', class: 'f-btn bp-logo-save', title: 'Turn the selected frame, text or image into an SVG logo with light, dark and mono versions', onClick: () => saveSelectionAsLogo(b.id) }, icon('plus', 13), h('span', {}, 'Save selection as logo'));
+    const body = [b.logos.length ? grid : drop, save];
     const sec = section('logos', 'Logos', b, body, [iconBtn('upload', 'Upload logo', () => pickLogos(b.id))]);
     let depth = 0;
     sec.addEventListener('dragenter', (e) => {
@@ -1235,5 +1329,11 @@ window.Folio = window.Folio || {};
     },
     importText,
     uploadLogos,
+    saveSelectionAsLogo: () => activeBrand() && saveSelectionAsLogo(activeBrand().id),
+    makeVersions: (logoId) => {
+      const b = activeBrand();
+      const l = b && b.logos.find((x) => x.id === logoId);
+      if (l) makeVersions(b.id, l);
+    },
   };
 })();

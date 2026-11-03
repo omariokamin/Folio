@@ -73,6 +73,8 @@ window.Folio = window.Folio || {};
     create_instances: 'Placing components',
     update_instances: 'Updating instances',
     add_starter_kit: 'Adding the starter kit',
+    draft_logo: 'Drafting a logo',
+    save_logo: 'Saving the logo',
   };
 
   const store = Folio.store;

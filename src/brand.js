@@ -125,6 +125,15 @@ window.Folio = window.Folio || {};
     return s.startsWith('#') ? s.toLowerCase() : s;
   }
 
+  const LOGO_VERSIONS = ['on-light', 'on-dark', 'mono', 'symbol'];
+  /** A logo's optional version label and the group linking the versions of one logo. */
+  function logoMeta(l) {
+    const out = {};
+    if (LOGO_VERSIONS.includes(l.version)) out.version = l.version;
+    if (safeId(l.group)) out.group = l.group;
+    return out;
+  }
+
   function normFill(f) {
     if (!isObj(f) || !FILL_TYPES.includes(f.type)) return null;
     const out = clone(f);
@@ -212,6 +221,7 @@ window.Folio = window.Folio || {};
         src: l.src,
         width: num(l.width, 0, 0, 100000) || 0,
         height: num(l.height, 0, 0, 100000) || 0,
+        ...logoMeta(l),
       });
     });
 
@@ -856,12 +866,15 @@ window.Folio = window.Folio || {};
     update(brandId, { logos: b.logos.filter((l) => l.id !== logoId) });
     return true;
   }
-  /** Add an already-prepared logo {name, src, width, height}. Returns the logo (with id). */
-  function addLogoSrc(brandId, { name = 'Logo', src, width = 0, height = 0 } = {}) {
+  /**
+   * Add an already-prepared logo {name, src, width, height, version?, group?}. Returns the logo (with id).
+   * src may be an internal data:image/svg+xml URL from Folio.svg (sanitized by the caller).
+   */
+  function addLogoSrc(brandId, { name = 'Logo', src, width = 0, height = 0, ...meta } = {}) {
     const b = get(brandId);
     if (!b || typeof src !== 'string' || !src) return null;
     if (src.length > LOGO_MAX_BYTES) throw new Error('That logo is too large (over 1.5 MB). Try a smaller file or an SVG.');
-    const logo = { id: 'l_' + rid(4), name: str(name, 60) || 'Logo', src, width: Math.round(width) || 0, height: Math.round(height) || 0 };
+    const logo = { id: 'l_' + rid(4), name: str(name, 60) || 'Logo', src, width: Math.round(width) || 0, height: Math.round(height) || 0, ...logoMeta(meta) };
     while (b.logos.some((x) => x.id === logo.id)) logo.id = 'l_' + rid(4);
     update(brandId, { logos: [...b.logos, logo] });
     return logo;

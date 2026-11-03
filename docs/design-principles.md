@@ -120,8 +120,13 @@ Claude never draws grey "image here" boxes, icons in tinted squares or decorativ
 - **App screens:** the screen answers one question, and the biggest block answers it. Titles are
   18–32px, numbers 16–40, body 13–16. Surfaces use a border or a tone step, and the accent goes on
   data. No navy sidebars, "Welcome back" greetings or rainbow charts.
-- **Logos** (only when you ask): two or three distinct directions in black first, tested at
-  16–64px on light and dark backgrounds.
+- **Logos** (only when you ask): a short brief (name, audience, 3–5 adjectives, competitors), the
+  category's clichés listed so they can be avoided, 8–12 one-line ideas, and the three most
+  different drawn as SVG in black first. Each is tested at 64, 32 and 16px and reversed, then the
+  three are shown with a recommendation. Only after you choose does Claude add colour and save it
+  to the brand kit with on-light, on-dark and one-colour versions. Red flags are clip-art
+  literalism, an unchanged stock font, effects rescuing a weak shape and details under 1/48 of the
+  mark. Claude recommends a trademark search before real use.
 
 ## 9. Components
 

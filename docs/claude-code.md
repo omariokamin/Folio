@@ -120,11 +120,19 @@ previous colours").
 - *Designs stay linked to the kit.* Claude uses the kit's colours, fonts and corner sizes as links,
   not copies. Change a colour in the kit (or ask Claude: "make our main colour a deeper red") and
   every layer that uses it updates at once. Switching the document to another kit re-styles it.
-- *Logos*: upload your logo files in the Brand tab and Claude will place them on your designs. Claude
-  can't upload files itself; it can only add a logo from a web link (`https://…`) you give it.
+- *Logos*: upload your logo files in the Brand tab and Claude will place them on your designs.
+  Logos Claude designs for you are saved with the `save_logo` tool (see **Logos** below).
 - Kit changes are undone with `⌘Z` like everything else. Kits are saved in the browser, and the
   `localhost:4317` tab has its own list, so use **Export .json** / **Import .json** in the Brand tab
   to move a kit between browsers or computers.
+
+**Logos.** Ask "Design a logo for my pottery studio, Kiln." Claude asks a few questions, then draws
+three different ideas as real vector (SVG) logos on a **Logo concepts** artboard. Each card shows the
+logo large, at 64, 32 and 16 pixels tall, and on a dark background, so you can see whether it still
+works small. Pick one ("go with the second, in dark green") and Claude saves it to your brand kit in
+on-light, on-dark and one-colour versions, ready to place on any design. Claude only designs logos
+when you ask. Before using one for real, check that nobody else has registered something similar
+(a trademark search).
 
 **Components.** For things that repeat, such as buttons, cards and nav bars, Claude makes one
 **main component** and places linked copies (**instances**) of it.

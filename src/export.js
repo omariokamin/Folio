@@ -8,6 +8,7 @@
  *     pageFor(id)        -> a complete standalone .html document
  *     exportPng(id, scale), downloadPage(id), copyCode(id)
  *     pngDataUrl(id, {scale, maxSize}) -> Promise<data URL>  (no download; used by the AI screenshot tool)
+ *     fontFaceCss(families, text, {exact}) -> Promise<@font-face CSS with inlined font files>
  *     saveFile(), openFile()  -> the document as .folio.json
  *
  *   Folio.codePanel     -> the "Code" drawer under the canvas (toggle(show?))
@@ -337,14 +338,22 @@ ${html}
     for (const c of codes) if (ranges.some(([lo, hi]) => c >= lo && c <= hi)) return true;
     return false;
   }
-  async function fontEmbedCss(id) {
-    const href = Folio.fonts && Folio.fonts.googleHref(fontsUsed(id));
-    if (!href || !window.fetch) return '';
+  function fontEmbedCss(id) {
     const text = [id, ...store.descendants(id)]
       .map((i) => store.get(i))
       .filter((n) => n && n.type === 'text' && n.text)
       .map((n) => n.text.content)
       .join('');
+    return fontFaceCss(fontsUsed(id), text);
+  }
+  /**
+   * Shared by PNG export and Folio.svg.embedFonts. opts.exact asks Google for fonts cut to exactly
+   * the characters in `text` (tiny files, for SVG logos stored in the brand kit).
+   */
+  async function fontFaceCss(families, text, opts = {}) {
+    let href = Folio.fonts && Folio.fonts.googleHref(families);
+    if (!href || !window.fetch) return '';
+    if (opts.exact) href += '&text=' + encodeURIComponent([...new Set(text)].join(''));
     const codes = new Set([...text].map((ch) => ch.codePointAt(0)));
     const key = href + '|' + [...codes].sort().join(',');
     if (fontCssCache.has(key)) return fontCssCache.get(key);
@@ -538,6 +547,7 @@ ${html}
     pageFor,
     snippetFor,
     fontsUsed,
+    fontFaceCss,
     varsUsed,
     rootBlockFor,
     exportPng,

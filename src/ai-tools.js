@@ -2686,7 +2686,7 @@ window.Folio = window.Folio || {};
       if (it.src != null || it.url != null) {
         const s = String(it.src != null ? it.src : it.url).trim();
         if (/^data:/i.test(s) || /^blob:/i.test(s)) {
-          ctx.warn(`${label}: logo files can't be uploaded through set_brand (data: and blob: URLs are refused). Ask the user to upload the logo in the Brand panel, or give an https:// URL`);
+          ctx.warn(`${label}: data: and blob: URLs are refused by set_brand. Save an SVG logo you drew with save_logo (svg or node_id); for the user's own file, ask them to upload it in the Brand panel, or give an https:// URL`);
           continue;
         }
         let ok = /^https:\/\//i.test(s) && s.length <= 2048;
@@ -3493,6 +3493,262 @@ window.Folio = window.Folio || {};
     return result(out, ids.length ? `Added the starter kit (${ids.length} components)` : 'Starter kit already present', changed);
   }
 
+  // ---------- logos (Folio.svg, src/svg.js) ----------
+  const svgApi = () => (Folio.svg && typeof Folio.svg.sanitize === 'function' ? Folio.svg : null);
+  const NO_SVG = 'Logo tools are not available in this build of Folio (src/svg.js is not loaded). Draft the logo with create_nodes (text and frames) instead.';
+  const LOGO_BOARD = 'Logo concepts';
+  const CARD_PREFIX = 'Concept / ';
+  const MAX_SVG_CHARS = 200000;
+  const MAX_KIT_LOGOS = 24;
+  const SIZES = [64, 32, 16];
+
+  /** Sanitized SVG with its fonts embedded: { svg, warnings } or { error }. */
+  async function cleanSvg(raw, label) {
+    const V = svgApi();
+    if (typeof raw !== 'string' || !/<svg[\s>]/i.test(raw)) return { error: `${label} must be SVG markup starting with <svg …>.` };
+    if (raw.length > MAX_SVG_CHARS) return { error: `${label} is too large (${Math.round(raw.length / 1024)} KB; the limit is ${MAX_SVG_CHARS / 1000} KB). Simplify the paths.` };
+    let s;
+    try {
+      s = V.sanitize(raw);
+    } catch (e) {
+      return { error: `${label} could not be used: ${errText(e)}` };
+    }
+    const warnings = (Array.isArray(s.warnings) ? s.warnings : []).map((w) => `${label}: ${w}`);
+    let svg = s.svg;
+    const fw = [];
+    try {
+      const out = await timeout(V.embedFonts(svg, fw), 12000);
+      if (typeof out === 'string') svg = out;
+      else fw.push('fonts could not be embedded in time, so its text may show in a fallback font outside Folio');
+    } catch (e) {
+      fw.push(`fonts could not be embedded (${errText(e)})`);
+    }
+    fw.forEach((w) => warnings.push(`${label}: ${w}`));
+    return { svg, warnings };
+  }
+
+  function svgRatio(svg) {
+    const sz = safe(() => Folio.svg.size(svg), null);
+    const w = sz && Number(sz.width);
+    const h = sz && Number(sz.height);
+    return w > 0 && h > 0 ? { w, h, ratio: clamp(w / h, 0.1, 20) } : { w: 0, h: 0, ratio: 1 };
+  }
+
+  /** Width × height that fits a box while keeping the logo's proportions. */
+  const fit = (ratio, maxW, maxH) => {
+    const w = Math.min(maxW, maxH * ratio);
+    return { width: Math.max(1, Math.round(w)), height: Math.max(1, Math.round(w / ratio)) };
+  };
+
+  /** One concept card: large on white, 64/32/16 px on white and on near-black, caption. Fixed size so cards line up. */
+  function cardTree(name, concept, light, dark, ratio) {
+    const img = (nm, src, sz) => ({ type: 'image', name: nm, width: sz.width, height: sz.height, image: { src, fit: 'contain' } });
+    const ground = (nm, bg, border, src, ink) => ({
+      type: 'frame',
+      name: nm,
+      sizing: { w: 'fill' },
+      layout: { gap: 10, padding: [14, 16] },
+      style: { fills: [{ type: 'solid', color: bg }], radius: 10, border: { width: 1, color: border } },
+      children: SIZES.map((px) => {
+        const sz = fit(ratio, 290, px);
+        return {
+          type: 'frame',
+          name: `${px} px`,
+          sizing: { w: 'fill' },
+          layout: { direction: 'row', align: 'center', gap: 12 },
+          children: [
+            { type: 'text', name: 'Size', width: 40, text: { content: `${sz.height} px`, size: 11, weight: 500, color: ink } },
+            img('Logo', src, sz),
+          ],
+        };
+      }),
+    });
+    return {
+      type: 'frame',
+      name: CARD_PREFIX + name,
+      width: 426,
+      sizing: { h: 'hug' },
+      layout: { gap: 12, padding: 20 },
+      style: { fills: [{ type: 'solid', color: '#ffffff' }], radius: 16 },
+      children: [
+        {
+          type: 'frame',
+          name: 'Stage',
+          sizing: { w: 'fill' },
+          height: 190,
+          layout: { justify: 'center', align: 'center' },
+          style: { fills: [{ type: 'solid', color: '#ffffff' }], radius: 10, border: { width: 1, color: '#e6e5e1' } },
+          children: [img('Logo', light, fit(ratio, 300, 120))],
+        },
+        ground('On light', '#ffffff', '#e6e5e1', light, '#8b8a85'),
+        ground('On dark', '#131416', '#131416', dark, '#8e9096'),
+        {
+          type: 'frame',
+          name: 'Caption',
+          sizing: { w: 'fill' },
+          height: 88,
+          layout: { gap: 4, padding: [4, 2, 0, 2] },
+          style: { clip: true },
+          children: [
+            { type: 'text', name: 'Name', sizing: { w: 'fill' }, text: { content: name, size: 15, weight: 600, color: '#16181d' } },
+            ...(concept ? [{ type: 'text', name: 'Concept', sizing: { w: 'fill' }, text: { content: concept, size: 13, lineHeight: 1.45, color: '#5d5f66' } }] : []),
+          ],
+        },
+      ],
+    };
+  }
+
+  async function draftLogo(input) {
+    const V = svgApi();
+    if (!V) return fail(NO_SVG, 'Logo tools unavailable');
+    const store = S();
+    const name = clip(typeof input.name === 'string' ? input.name : '', 60);
+    if (!name) return fail('draft_logo needs "name": a short label for this concept, e.g. "Arch dot wordmark".', 'Bad logo input');
+    let concept = typeof input.concept === 'string' ? clip(input.concept, 400) : '';
+    const warnings = [];
+    if (!concept) warnings.push('no "concept" was given: add one sentence saying the idea, so the user can compare drafts');
+    if (concept.length > 150) {
+      concept = clip(concept, 150);
+      warnings.push('the concept was shortened to fit the card: keep it to one sentence');
+    }
+    const c = await cleanSvg(input.svg, 'svg');
+    if (c.error) return fail(c.error + ' Nothing was drafted.', 'Logo not drafted');
+    warnings.push(...c.warnings);
+    const { ratio, w, h } = svgRatio(c.svg);
+    const vers = safe(() => V.versions(c.svg, activeBrand() || undefined), null);
+    const light = V.toDataUrl(c.svg);
+    const dark = vers && typeof vers['on-dark'] === 'string' ? V.toDataUrl(vers['on-dark']) : light;
+
+    let board = store.doc.roots.map((id) => store.get(id)).find((n) => n && n.type === 'frame' && n.name === LOGO_BOARD && !n.instance && !n.component);
+    const created = [];
+    if (!board) {
+      const spot = nextArtboardSpot();
+      board = store.buildFromTree({
+        type: 'frame',
+        name: LOGO_BOARD,
+        x: spot.x,
+        y: spot.y,
+        width: 1440,
+        height: 800,
+        sizing: { w: 'fixed', h: 'hug' },
+        layout: { mode: 'flex', direction: 'row', wrap: true, gap: 32, padding: [48, 48, 48, 48], align: 'flex-start' },
+        style: { fills: [{ type: 'solid', color: '#e9e8e4', visible: true }], clip: true },
+      });
+      created.push(board.id);
+    }
+    const old = board.children.map((id) => store.get(id)).find((n) => n && n.name && keyOf(n.name) === keyOf(CARD_PREFIX + name));
+    let index;
+    if (old) {
+      index = board.children.indexOf(old.id);
+      store.remove([old.id]);
+    }
+    const ctx = makeCtx('create');
+    const info = { seen: new WeakSet(), count: 0, truncated: 0, fonts: new Set(), parentId: board.id, parentFlex: true, parentDir: 'row' };
+    const clean = cleanTree(cardTree(name, concept, light, dark, ratio), ctx, info, 0, null, LOGO_BOARD);
+    const card = store.buildFromTree(clean[0], board.id, index);
+    const ids = [card.id, ...store.descendants(card.id)];
+    const logoId = ids.find((id) => store.get(id).type === 'image');
+    afterMutation(created.concat(ids), [card.id], created.length ? created : null);
+    const out = {
+      card: card.id,
+      image: logoId,
+      artboard: `${board.id} ${q(LOGO_BOARD)}`,
+      viewBox: w && h ? [r2(w), r2(h)] : undefined,
+      next: `Screenshot ${board.id} to judge every draft at once (readable at 16 px? still clear reversed?). To keep one, call save_logo with "node_id": "${logoId}".`,
+    };
+    if (old) out.replaced = `the earlier draft ${q(name)} (${old.id})`;
+    if (warnings.length) out.warnings = warnings.slice(0, MAX_WARNINGS);
+    return result(out, `${old ? 'Redrew' : 'Drafted'} logo ${q(name)}`, ids);
+  }
+
+  async function saveLogo(input) {
+    const V = svgApi();
+    if (!V) return fail(NO_SVG, 'Logo tools unavailable');
+    const B = brandApi();
+    if (!B || typeof B.addLogoSrc !== 'function' || typeof B.create !== 'function') return fail(UNAVAILABLE, 'Brand kits unavailable');
+    const store = S();
+    const notes = [];
+    let name = clip(typeof input.name === 'string' ? input.name : '', 60);
+    let raw = input.svg;
+    if (raw == null) {
+      const nid = input.node_id != null ? input.node_id : input.id;
+      if (nid == null) return fail('save_logo needs "node_id" (a draft\'s image or card from draft_logo, or any frame or image) or "svg" markup.', 'Bad logo input');
+      const r = resolve(nid, notes);
+      if (r.error) return fail(r.error + ' Nothing was saved.', 'Layer not found');
+      let node = r.node;
+      // a concept card from draft_logo, or any layer inside one, means that draft's logo
+      let card = node;
+      while (card && !(card.type === 'frame' && String(card.name).startsWith(CARD_PREFIX))) card = store.getParent(card.id);
+      if (card) {
+        if (!name) name = clip(card.name.slice(CARD_PREFIX.length), 60);
+        node = store.descendants(card.id).map((id) => store.get(id)).find((n) => n.type === 'image') || node;
+      }
+      if (node.type === 'text') return fail(`${q(node.name)} is a text layer; pass the frame or image that holds the whole logo.`, 'Bad logo input');
+      // an SVG image (a draft) keeps its own markup and viewBox; anything else is drawn as vectors
+      const src = node.type === 'image' && node.image ? safe(() => Folio.brand.resolveSrc(node.image.src), node.image.src) : null;
+      raw = src && V.decode ? V.decode(src) : null;
+      if (!raw) {
+        try {
+          raw = await V.fromNode(node.id, notes);
+        } catch (e) {
+          return fail(`Could not turn ${q(node.name)} into SVG: ${errText(e)}. Pass "svg" markup instead.`, 'Logo not saved');
+        }
+      }
+      if (!name) name = clip(node.name, 60);
+    }
+    if (!name) return fail('save_logo needs "name", e.g. the brand name.', 'Bad logo input');
+    const c = await cleanSvg(raw, 'logo');
+    if (c.error) return fail(c.error + ' Nothing was saved.', 'Logo not saved');
+    const warnings = notes.concat(c.warnings);
+    let sym = null;
+    if (input.symbol_svg != null) {
+      sym = await cleanSvg(input.symbol_svg, 'symbol_svg');
+      if (sym.error) {
+        warnings.push(sym.error + ' The symbol was skipped.');
+        sym = null;
+      } else warnings.push(...sym.warnings);
+    }
+
+    let brand = activeBrand();
+    let createdKit = false;
+    if (!brand) {
+      try {
+        const made = B.create({ name });
+        B.setActive(made.id);
+        brand = activeBrand() || made;
+        createdKit = true;
+      } catch (e) {
+        return fail(`Folio could not create a brand kit for the logo: ${errText(e)}`, 'Logo not saved');
+      }
+    }
+    if (listOf(brand, 'logos').length + (sym ? 4 : 3) > MAX_KIT_LOGOS) return fail(`${q(brand.name)} already holds ${listOf(brand, 'logos').length} logos. Remove old ones first (set_brand logos [{"id": …, "delete": true}]). Nothing was saved.`, 'Too many logos');
+
+    const vers = safe(() => V.versions(c.svg, brand), null) || {};
+    const list = [['on-light', vers['on-light'] || c.svg, 'on light'], ['on-dark', vers['on-dark'], 'on dark'], ['mono', vers.mono, 'one colour']];
+    if (sym) list.push(['symbol', sym.svg, 'symbol']);
+    const group = newId('g_', new Set(listOf(brand, 'logos').map((l) => l.group).filter(Boolean)));
+    const logos = {};
+    for (const [version, svg, label] of list) {
+      if (typeof svg !== 'string') {
+        warnings.push(`the ${label} version could not be made`);
+        continue;
+      }
+      const sz = svgRatio(svg);
+      try {
+        const l = B.addLogoSrc(brand.id, { name: `${name} — ${label}`, src: V.toDataUrl(svg), width: sz.w, height: sz.h, version, group });
+        if (l && l.id) logos[version] = tokenFor('logo', l.id);
+      } catch (e) {
+        warnings.push(`the ${label} version was not saved: ${errText(e)}`);
+      }
+    }
+    if (!Object.keys(logos).length) return fail(`No logo version could be saved. ${warnings.join(' ')}`, 'Logo not saved');
+    const out = { brand: `${brand.id} ${q(brand.name)}`, logos };
+    out.note = `Show a version with an image node {"image": {"src": "${logos['on-light'] || Object.values(logos)[0]}", "fit": "contain"}} and a width or height; use on-dark on dark grounds and mono for one-colour uses.`;
+    if (createdKit) out.createdKit = `No brand kit was active, so a new kit ${q(brand.name)} was made the document's brand, with placeholder colours and fonts. Tell the user, and set its colours and fonts with set_brand.`;
+    if (warnings.length) out.warnings = warnings.slice(0, MAX_WARNINGS);
+    return result(out, `Saved logo ${q(name)} to ${q(brand.name)}`, []);
+  }
+
   const HANDLERS = {
     get_document: getDocument,
     get_tree: getTree,
@@ -3508,6 +3764,8 @@ window.Folio = window.Folio || {};
     create_instances: createInstances,
     update_instances: updateInstances,
     add_starter_kit: addStarterKit,
+    draft_logo: draftLogo,
+    save_logo: saveLogo,
   };
 
   async function execute(name, input) {
