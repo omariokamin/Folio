@@ -7,6 +7,7 @@
  *     inlineHtmlFor(id)  -> HTML with every style inlined (style="…")
  *     pageFor(id)        -> a complete standalone .html document
  *     exportPng(id, scale), downloadPage(id), copyCode(id)
+ *     pngDataUrl(id, {scale, maxSize}) -> Promise<data URL>  (no download; used by the AI screenshot tool)
  *     saveFile(), openFile()  -> the document as .folio.json
  *
  *   Folio.codePanel     -> the "Code" drawer under the canvas (toggle(show?))
@@ -317,6 +318,65 @@ ${html}
     }
   }
 
+  /** html-to-image options for one layer (shared by exportPng and pngDataUrl). */
+  function pngOptions(el, n, pixelRatio) {
+    const width = el.offsetWidth || Math.round(n.width);
+    const height = el.offsetHeight || Math.round(n.height);
+    return {
+      pixelRatio,
+      width,
+      height,
+      cacheBust: false,
+      // put the artboard at the origin of the image (right/bottom must be reset too, or the
+      // computed "inset" of an artboard far out on the canvas pushes it out of frame)
+      style: { left: '0px', top: '0px', right: 'auto', bottom: 'auto', transform: 'none', margin: '0px' },
+    };
+  }
+
+  /** Render with embedded web fonts, falling back to no fonts if that fails. */
+  async function renderPng(lib, el, id, opts) {
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    try {
+      const css = await fontEmbedCss(id);
+      if (css) opts.fontEmbedCSS = css;
+    } catch (err) {
+      console.warn('[Folio] could not embed web fonts for the PNG', err);
+    }
+    try {
+      return await lib.toPng(el, opts);
+    } catch (err) {
+      console.warn('[Folio] PNG export with fonts failed, retrying without embedded fonts', err);
+      return await lib.toPng(el, { ...opts, skipFonts: true });
+    }
+  }
+
+  /**
+   * A PNG of a layer as a data URL — no download, no toasts (used by the AI screenshot tool).
+   * opts.scale: pixel ratio (default 1). opts.maxSize: cap for the longest side in px.
+   * Rejects with an Error whose `code` is 'no-lib' | 'no-node' | 'no-element' | 'render'.
+   */
+  async function pngDataUrl(id, opts = {}) {
+    const fail = (code, msg) => Object.assign(new Error(msg), { code });
+    const n = id && store.get(id);
+    if (!n) throw fail('no-node', 'No layer with id ' + id);
+    const lib = window.htmlToImage;
+    if (!lib || !lib.toPng) throw fail('no-lib', 'The html-to-image library is not loaded (it comes from the internet).');
+    if (Folio.render && Folio.render.sync) Folio.render.sync();
+    const el = Folio.render && Folio.render.el ? Folio.render.el(id) : null;
+    if (!el || !el.isConnected) throw fail('no-element', 'That layer is not on the canvas (is it hidden?).');
+    let ratio = Number(opts.scale) > 0 ? Number(opts.scale) : 1;
+    const o = pngOptions(el, n, ratio);
+    const longest = Math.max(o.width, o.height, 1);
+    if (Number(opts.maxSize) > 0) ratio = Math.min(ratio, Number(opts.maxSize) / longest);
+    ratio = Math.min(ratio, 16000 / longest); // browsers refuse huge canvases
+    o.pixelRatio = ratio;
+    try {
+      return await renderPng(lib, el, id, o);
+    } catch (err) {
+      throw Object.assign(err instanceof Error ? err : new Error(String(err)), { code: 'render' });
+    }
+  }
+
   async function exportPng(id, scale = 1) {
     id = id || targetId();
     if (!id) return;
@@ -331,34 +391,11 @@ ${html}
       toast('Could not find that layer on the canvas.', 'error');
       return;
     }
-    const width = el.offsetWidth || Math.round(n.width);
-    const height = el.offsetHeight || Math.round(n.height);
-    const opts = {
-      pixelRatio: scale,
-      width,
-      height,
-      cacheBust: false,
-      // put the artboard at the origin of the image (right/bottom must be reset too, or the
-      // computed "inset" of an artboard far out on the canvas pushes it out of frame)
-      style: { left: '0px', top: '0px', right: 'auto', bottom: 'auto', transform: 'none', margin: '0px' },
-    };
+    const opts = pngOptions(el, n, scale);
     const name = safeFilename(n.name) + (scale !== 1 ? `@${scale}x` : '') + '.png';
     toast(`Exporting ${name}…`);
     try {
-      if (document.fonts && document.fonts.ready) await document.fonts.ready;
-      try {
-        const css = await fontEmbedCss(id);
-        if (css) opts.fontEmbedCSS = css;
-      } catch (err) {
-        console.warn('[Folio] could not embed web fonts for the PNG', err);
-      }
-      let url;
-      try {
-        url = await lib.toPng(el, opts);
-      } catch (err) {
-        console.warn('[Folio] PNG export with fonts failed, retrying without embedded fonts', err);
-        url = await lib.toPng(el, { ...opts, skipFonts: true });
-      }
+      const url = await renderPng(lib, el, id, opts);
       download(name, url);
       toast(`Exported ${name}`, 'success');
     } catch (err) {
@@ -441,6 +478,7 @@ ${html}
     snippetFor,
     fontsUsed,
     exportPng,
+    pngDataUrl,
     downloadPage,
     copyCode,
     copyText,

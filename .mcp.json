@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "folio": {
+      "command": "node",
+      "args": ["mcp/folio-mcp.js"]
+    }
+  }
+}
