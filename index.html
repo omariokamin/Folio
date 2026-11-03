@@ -15,11 +15,16 @@
   <link rel="stylesheet" href="styles/shell.css" />
   <link rel="stylesheet" href="styles/ai.css" />
   <link rel="stylesheet" href="styles/bridge.css" />
+  <link rel="stylesheet" href="styles/brand.css" />
 </head>
 <body>
   <div id="app">
     <header id="toolbar"></header>
-    <aside id="left-panel"><div id="layers"></div></aside>
+    <aside id="left-panel">
+      <div id="left-tabs"></div>
+      <div id="layers"></div>
+      <div id="brand-panel" hidden></div>
+    </aside>
     <main id="canvas-viewport">
       <div id="canvas-world"></div>
       <div id="canvas-overlay"></div>
@@ -41,12 +46,14 @@
   <script src="src/css.js"></script>
   <script src="src/fonts.js"></script>
   <script src="src/ui.js"></script>
+  <script src="src/brand.js"></script>
   <script src="src/icons.js"></script>
   <script src="src/render.js"></script>
   <script src="src/overlay.js"></script>
   <script src="src/canvas.js"></script>
   <script src="src/inspector.js"></script>
   <script src="src/layers.js"></script>
+  <script src="src/brand-panel.js"></script>
   <script src="src/toolbar.js"></script>
   <script src="src/export.js"></script>
   <script src="src/shortcuts.js"></script>

@@ -193,3 +193,55 @@ Claude Code ──stdio MCP──► mcp/folio-mcp.js (Node ≥18, zero npm deps
   (Connected / Claude is designing… / Disconnected). Mutating tool calls are committed with
   `store.commit('Claude: <tool>')` after 1.2 s of quiet (one undo step per burst).
 - `.mcp.json` at the repo root registers the server for anyone who runs `claude` inside the folder.
+
+---
+
+## Brand kit (v0.3)
+
+Several brand kits live in a **library** (this browser, localStorage `folio:brands:v1`). Each document
+has one **active brand**, embedded as `doc.brand` (a full copy, so saved `.folio.json` files and undo
+carry it). Layers **link** to brand values through real CSS variables, so editing a brand colour
+updates every layer at once, and switching the document to another brand re-skins it.
+
+### Data
+```
+brand = {
+  id: 'b_xxxxxx', name: 'Crumb Bakery', updatedAt: 1730000000000,
+  colors: [ { id: 'primary', name: 'Primary', value: '#c2410c', core: true }, ... ],
+      // core ids (always present, can't be deleted): primary, secondary, accent, background, surface, text, muted
+      // custom colours get ids like 'c_ab12' (stable; renaming changes only `name`)
+  fonts:  [ { id: 'heading', name: 'Heading', family: 'Fraunces', weight: 700, core: true },
+            { id: 'body',    name: 'Body',    family: 'DM Sans',  weight: 400, core: true }, ... ],
+  logos:  [ { id: 'l_ab12', name: 'Logo — on light', src: 'data:image/png;base64,…' | 'https://…', width, height } ],
+      // uploads: SVG kept as-is; raster resized to max 1024px longest side; ≤ 1.5 MB each
+  voice:  { tagline, description, audience, tone: ['warm','playful'], useWords, avoidWords, sampleCopy },
+  style:  { radius: { sm: 6, md: 12, lg: 24 }, button: 'pill'|'rounded'|'square',
+            density: 'compact'|'comfortable'|'airy', shadow: 'none'|'soft'|'bold',
+            gradients: [ { name, fill: <a Folio fill object, e.g. mesh/linear> } ] }
+}
+```
+
+### Token references inside layers (plain strings, valid CSS)
+- Colour → `"var(--color-<id>)"` anywhere a colour goes (fills, stops, mesh points, text colour, border, shadow).
+- Font → `text.font = "var(--font-<id>)"` (`Folio.fonts.stack/ensure/weightsOf` already pass/resolve these).
+- Corner radius → `style.radius = "var(--radius-sm|md|lg)"` (`css.js` already passes strings through).
+- Logo → `image.src = "brand-logo:<logoId>"` (also allowed as an `image` fill `src`).
+- CSS variables generated from a brand: `--color-<id>`, `--font-<id>` (value = `Folio.fonts.stack(family)`),
+  `--radius-sm/md/lg`.
+
+### `Folio.brand` (src/brand.js) — API used by everyone else
+- `init()`: load library; sync `doc.brand` with the library (newer `updatedAt` wins; unknown brand from a
+  file is added to the library); apply CSS variables to `#canvas-world`; re-apply on store `'change'`,
+  `'doc'`, `'history'` (after undo/redo, write `doc.brand` back to the library if it differs).
+- `library()`, `active()` (doc.brand or null), `get(id)`, `templates()` (3–5 starter kits),
+  `create(fromTemplateOrPartial)`, `update(id, patch)` (deep-merge; arrays replaced; bumps updatedAt;
+  writes library + doc.brand when active; emits `'brand'`; **does not commit** — callers commit),
+  `remove(id)`, `duplicate(id)`, `setActive(id | null)` (copies into doc.brand; emits `'brand'`),
+  `exportJson(id)`, `importJson(text)`.
+- `cssVars(brand)` → `{ '--color-primary': '#c2410c', '--font-heading': '"Fraunces", Georgia, serif', ... }`
+- `cssRootBlock(brand)` → `":root {\n  --color-primary: #c2410c;\n  ...\n}"` for exports.
+- `isToken(value)`, `tokenOf(value)` → `{kind:'color'|'font'|'radius', id}` or null,
+  `resolveColor(v)` (token → literal colour; non-token unchanged), `resolveFont(v)`, `resolveSrc(src)`
+  (`brand-logo:` → logo src), `colorRef(id)` → `"var(--color-id)"`, `fontRef(id)`.
+- `detach(tokenString)` replaces every use in the document with its literal value (used before deleting a custom colour/font).
+- Store event `'brand'` fires whenever the active brand or its contents change.

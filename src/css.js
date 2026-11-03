@@ -102,6 +102,7 @@ window.Folio = window.Folio || {};
   }
 
   function radiusCss(radius) {
+    if (typeof radius === 'string') return radius || null; // e.g. brand token var(--radius-md)
     if (Array.isArray(radius)) {
       if (radius.every((v) => !v)) return null;
       return radius.map(px).join(' ');

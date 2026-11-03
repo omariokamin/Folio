@@ -46,8 +46,15 @@ window.Folio = window.Folio || {};
     return `https://fonts.googleapis.com/css2?${uniq.map(familyParam).join('&')}&display=swap`;
   }
 
+  /** Brand font tokens look like var(--font-heading); resolve them to a real family name. */
+  function resolve(family) {
+    if (family && family.startsWith('var(') && Folio.brand && Folio.brand.resolveFont) return Folio.brand.resolveFont(family);
+    return family;
+  }
+
   function ensure(family) {
-    if (!family || loaded.has(family)) return;
+    family = resolve(family);
+    if (!family || family.startsWith('var(') || loaded.has(family)) return;
     loaded.add(family);
     const sys = ['system-ui', 'Arial', 'Helvetica', 'Georgia', 'Times New Roman', 'Courier New'];
     if (sys.includes(family)) return;
@@ -59,6 +66,7 @@ window.Folio = window.Folio || {};
   }
 
   function stack(family) {
+    if (family && family.startsWith('var(')) return family; // brand token: the CSS variable holds the full stack
     const f = find(family);
     const cat = f ? f.category : 'sans-serif';
     const fallback =
@@ -68,6 +76,7 @@ window.Folio = window.Folio || {};
 
   /** Weights available for a family (for the weight dropdown). */
   function weightsOf(family) {
+    family = resolve(family);
     const f = find(family);
     if (!f) return [400, 700];
     if (Array.isArray(f.weights)) return f.weights;
@@ -77,5 +86,5 @@ window.Folio = window.Folio || {};
     return out;
   }
 
-  Folio.fonts = { list, ensure, stack, googleHref, weightsOf };
+  Folio.fonts = { list, ensure, stack, googleHref, weightsOf, resolve };
 })();
