@@ -123,11 +123,12 @@ window.Folio = window.Folio || {};
   /** One CSS declaration -> utilities ([] = nothing needed, null = keep it as inline style). */
   function utility(k, v, css) {
     const one = (c) => (c ? [c] : null);
-    if (ENUMS[k]) return v in ENUMS[k] ? [ENUMS[k][v]].filter(Boolean) : null;
+    if (ENUMS[k]) return Object.hasOwn(ENUMS[k], v) ? [ENUMS[k][v]].filter(Boolean) : null;
     if (BOX[k]) return one(size(BOX[k], v));
     switch (k) {
       case 'flex':
-        return [v === '1 1 0px' ? 'flex-1' : `flex-${arb(v)}`];
+        // not flex-1: that is `flex: 1` (basis 0%), which acts as content size in auto-height columns
+        return [`flex-${arb(v)}`];
       case 'padding':
         return padding(v);
       case 'background-color':
@@ -183,6 +184,7 @@ window.Folio = window.Folio || {};
     const classes = [];
     const style = {};
     Object.keys(css).forEach((k) => {
+      if (k === 'flex-shrink' && 'flex' in css) return; // the later `flex` shorthand sets the shrink
       const u = utility(k, css[k], css);
       if (u) classes.push(...u);
       else style[k] = css[k];
@@ -244,7 +246,8 @@ window.Folio = window.Folio || {};
   function themeFor(id) {
     const vars = ex().brandVars(id);
     const keys = Object.keys(vars);
-    const theme = keys.length ? `\n\n@theme {\n${keys.map((k) => `  ${k}: ${vars[k]};`).join('\n')}\n}` : '';
+    // static: inline styles (gradients) use the variables too, and Tailwind only emits those a utility uses
+    const theme = keys.length ? `\n\n@theme static {\n${keys.map((k) => `  ${k}: ${vars[k]};`).join('\n')}\n}` : '';
     return `@import "tailwindcss";${theme}`;
   }
 

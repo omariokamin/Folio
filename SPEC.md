@@ -575,13 +575,13 @@ snap to nearby edges and centres, with pink guide lines and distance labels.
 
 Export any artboard or layer as **Tailwind CSS v4** code, as **HTML** (`class="…"`) or a **React component**
 (`className="…"`), plus the `@theme` block for the brand tokens it uses. Values are **exact**: a standard class
-when it matches exactly, an arbitrary class otherwise (`p-4` for 16px, `p-[18px]` for 18px).
+when it matches exactly, an arbitrary class otherwise (`p-4` for 16px, `p-4.5` for 18px, `p-[17px]` for 17px).
 
 ### `src/tailwind.js` → `Folio.tailwind`
 - `classesFor(node, parent)` → `{ classes: string[], style: {prop: value} }` built from
   `Folio.css.nodeStyles(node, { mode: 'export' })` — the single source of truth — so Tailwind output can never
   drift from the canvas. Anything without a faithful utility stays in `style` (inline), never dropped.
-- `htmlFor(id)`, `jsxFor(id, { componentName })`, `themeFor(id)` (`@import "tailwindcss";` + `@theme { … }`
+- `htmlFor(id)`, `jsxFor(id, { componentName })`, `themeFor(id)` (`@import "tailwindcss";` + `@theme static { … }` (static: keep variables only inline styles use)
   with only the variables the subtree uses: `--color-*`, `--font-*`, `--radius-*`), `pageFor(id)` (a standalone
   preview: Google Fonts link, `<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.3"></script>`,
   `<style type="text/tailwindcss">` with the theme, then the HTML).
@@ -589,8 +589,8 @@ when it matches exactly, an arbitrary class otherwise (`p-4` for 16px, `p-[18px]
   - Spacing/size: px divisible by 2 → `<prefix>-<px/4>` (v4 accepts any multiple of 0.25rem; keep to integers and
     .5), else `<prefix>-[Npx]`. `100%` → `-full`, `fit-content` → `-fit`, `max-content` → `-max`, `auto` → `-auto`.
     Padding collapses to `p-`, `px-`/`py-`, or per side. `gap`, `left/top`, `min-w-0`.
-  - Flex: `flex`, `flex-col`/`flex-row`, `flex-wrap`, `justify-*`, `items-*`, `self-stretch`, `flex-1` for
-    `1 1 0px`, `shrink-0`. Position `relative`/`absolute`.
+  - Flex: `flex`, `flex-col`/`flex-row`, `flex-wrap`, `justify-*`, `items-*`, `self-stretch`, `flex-[1_1_0px]` (not `flex-1`: its 0% basis
+    sizes differently in auto-height columns), `shrink-0` (omitted when a `flex` shorthand is present). Position `relative`/`absolute`.
   - Colour: brand token `var(--color-x)` → `bg-x` / `text-x` / `border-x`; literal → `bg-[#rrggbb(aa)]`.
     Gradient/mesh/noise/image backgrounds → inline style (exact CSS).
   - Radius: `var(--radius-sm|md|lg)` → `rounded-sm|md|lg` (theme overrides), 9999 → `rounded-full`, else
@@ -598,12 +598,12 @@ when it matches exactly, an arbitrary class otherwise (`p-4` for 16px, `p-[18px]
     non-solid style → `border-dashed|dotted|double`.
   - Effects: `shadow-[…]` (spaces → `_`), `opacity-N`, `blur-[Npx]`, `backdrop-blur-[Npx]`, `backdrop-saturate-N`,
     `mix-blend-*`, `overflow-hidden`, `rotate-N` / `rotate-[Ndeg]`.
-  - Text: `font-x` for `var(--font-x)`, else `font-['Family_Name']`; size named only on exact match (xs 12, sm 14,
+  - Text: `font-x` for `var(--font-x)`, else `font-['Family_Name',fallbacks]` (keeps the stack); size named only on exact match (xs 12, sm 14,
     base 16, lg 18, xl 20, 2xl 24, 3xl 30, 4xl 36, 5xl 48, 6xl 60, 7xl 72, 8xl 96, 9xl 128) else `text-[Npx]`;
     always emit `leading-[…]` (named `leading-none` for 1); `font-thin…black` for 100…900; `tracking-[…em]`;
     `text-center|right|justify`; `uppercase|lowercase|capitalize`; `italic`; `underline|line-through`;
     `whitespace-pre-wrap`; `[overflow-wrap:break-word]`; `m-0`. Omit `box-sizing` (preflight).
-  - Images: `<img>` with `object-*`, `block`; `brand-logo:` srcs resolved like the HTML export.
+  - Images: `<img>` with `object-*`, `block`, `max-w-none` (undo preflight); `brand-logo:` srcs resolved like the HTML export.
 - Same tags and structure as `Folio.exporter.htmlFor` (reuse its helpers where possible). JSX: `className`,
   self-closing `<img … />`, `style={{ camelCase: '…' }}`, text escaped for JSX (`{`, `}`, `<`, `>`), component name
   from the layer name in PascalCase, `export default function Name() { return (…); }`.

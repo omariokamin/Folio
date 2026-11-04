@@ -649,6 +649,7 @@ ${html}
   const TABS = [
     { id: 'split', label: 'HTML + CSS' },
     { id: 'inline', label: 'Inline HTML' },
+    { id: 'tailwind', label: 'Tailwind' },
     { id: 'json', label: 'JSON' },
   ];
 
@@ -674,6 +675,7 @@ ${html}
     el: null,
     open: false,
     tab: 'split',
+    react: false, // Tailwind tab: HTML or React
     timer: 0,
     subjectId: null,
     code: {},
@@ -688,6 +690,7 @@ ${html}
     const tab = panel.tab;
     if (tab === 'split') return { html: htmlFor(id), css: cssFor(id) };
     if (tab === 'inline') return { inline: inlineHtmlFor(id) };
+    if (tab === 'tailwind' && Folio.tailwind) return { theme: Folio.tailwind.themeFor(id), markup: panel.react ? Folio.tailwind.jsxFor(id) : Folio.tailwind.htmlFor(id) };
     return { json: JSON.stringify(store.toTree(id), null, 2) };
   }
 
@@ -744,6 +747,23 @@ ${html}
       content = h('div', { class: 'cp__split' }, pane('HTML', panel.code.html, hlHtml, 'html'), pane('CSS', panel.code.css, hlCss, 'css'));
     } else if (panel.tab === 'inline') {
       content = pane('Inline HTML', panel.code.inline, hlHtml, 'inline');
+    } else if (panel.tab === 'tailwind') {
+      const markup = pane(panel.react ? 'React' : 'HTML', panel.code.markup, hlHtml, 'tw');
+      const seg = h(
+        'div',
+        { class: 'f-seg cp__tw-format', role: 'tablist' },
+        [['HTML', false], ['React', true]].map(([label, react]) => {
+          const b = h('button', { type: 'button', role: 'tab', class: react === panel.react ? 'is-active' : '', dataset: { twFormat: label.toLowerCase() } }, label);
+          b.addEventListener('click', () => {
+            panel.react = react;
+            prefs.set('codeTwReact', react);
+            renderPanel();
+          });
+          return b;
+        })
+      );
+      markup.firstChild.firstChild.replaceWith(seg);
+      content = h('div', { class: 'cp__split cp__split--stack' }, pane('Theme (CSS)', panel.code.theme, hlCss, 'theme'), markup);
     } else {
       content = pane('JSON', panel.code.json, hlJson, 'json');
     }
@@ -780,6 +800,7 @@ ${html}
     if (!id) return '';
     if (panel.tab === 'split') return snippetFor(id);
     if (panel.tab === 'inline') return inlineHtmlFor(id) + '\n';
+    if (panel.tab === 'tailwind') return `${panel.code.theme}\n\n${panel.code.markup}`;
     return JSON.stringify(store.toTree(id), null, 2);
   }
 
@@ -789,6 +810,7 @@ ${html}
     if (!n) return;
     const base = safeFilename(n.name);
     if (panel.tab === 'split') return downloadPage(id);
+    if (panel.tab === 'tailwind') return downloadTailwind(id, panel.react);
     if (panel.tab === 'inline') {
       const fonts = fontLinks(id);
       const doc = `<!doctype html>\n<html lang="en">\n<head>\n  <meta charset="utf-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1">\n  <title>${esc(n.name)}</title>\n${fonts}  <style>\n${RESET}\n  </style>\n</head>\n<body>\n${inlineHtmlFor(id)}\n</body>\n</html>\n`;
@@ -828,6 +850,7 @@ ${html}
     if (!el) return;
     panel.el = el;
     panel.tab = TABS.some((t) => t.id === prefs.get('codeTab')) ? prefs.get('codeTab') : 'split';
+    panel.react = !!prefs.get('codeTwReact', false);
     el.innerHTML = '';
     el.classList.add('cp');
     el.style.height = Math.max(120, Number(prefs.get('codeH', 260)) || 260) + 'px';

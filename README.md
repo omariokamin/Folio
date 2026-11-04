@@ -96,6 +96,9 @@ The full step-by-step guide, including troubleshooting, is in
 - **Code panel:** shows the HTML + CSS (or inline-styled HTML, or JSON) of whatever you select,
   updating live as you design.
 - **Export:** PNG at 1x / 2x / 3x, a complete standalone `.html` page, or copy the HTML + CSS.
+- **Tailwind export:** the **Tailwind** tab in the code panel (and **Export → Tailwind**) turns any layer
+  into Tailwind CSS v4 classes, as HTML or a React component, with an `@theme` block for your brand
+  tokens. Exact values: `p-4` for 16px, `p-[17px]` when no class matches; gradients stay inline styles.
 - **Undo / redo**, copy / paste, duplicate, autosave, and save/open `.folio.json` files.
 - **Import HTML:** **File → Import HTML…** turns pasted code or an `.html` file into editable layers
   with auto layout, and `⇧⌘V` pastes a selection copied from a website as layers. Scripts in the
@@ -224,6 +227,7 @@ adds its piece to a single global object, `window.Folio`.
 | `src/layers.js` | The left panel: the layer tree with drag-and-drop, rename, hide and lock. |
 | `src/toolbar.js` | The top bar: File menu, tools, undo/redo, zoom, Code and Export buttons. Also the shared dropdown menu. |
 | `src/export.js` | Generates HTML/CSS, the standalone page and PNGs; saves/opens files; the code panel. |
+| `src/tailwind.js` | Turns the same CSS into Tailwind classes (HTML or React) plus the `@theme` block. |
 | `src/shortcuts.js` | All keyboard shortcuts and the shortcuts help window. |
 | `src/demo.js` | Builds the starter document. A good example of how designs are described. |
 | `src/brand.js` | Brand kits: the library, the active brand, and the CSS variables (`--color-primary`, …) that link layers to it. |
@@ -246,7 +250,6 @@ adds its piece to a single global object, `window.Folio`.
 
 _Done so far: the AI designer and Claude Code connection (v0.2), brand kits (v0.3), components and variants (v0.4), the logo designer (v0.5) and pages (v0.6)._
 
-- **Tailwind export.** Turn the CSS of each layer into Tailwind utility classes.
 - **HTML import.** Paste an existing web page or snippet and turn it into editable layers.
 - More: a grid and snapping, comments, version history, video
   export of simple animations.
