@@ -195,7 +195,7 @@ New frames are transparent unless you give them fills; new artboards default to 
 - Linear gradient: {"type": "linear", "angle": 180, "stops": [{"color": "#f4efe6", "pos": 0}, {"color": "#e3d9c6", "pos": 100}]} (angle in degrees, 180 = top to bottom; pos 0–100).
 - Radial and conic gradients: {"type": "radial", "cx": 50, "cy": 0, "stops": [ … ]} (centre in %), {"type": "conic", "angle": 0, "stops": [ … ]}
 - Mesh gradient: {"type": "mesh", "base": "#173d2c", "spread": 60, "points": [{"color": "#2f6b4f", "x": 10, "y": 12}, {"color": "#c9b77a", "x": 88, "y": 20}, {"color": "#0f2a1f", "x": 16, "y": 90}, {"color": "#7a9a6a", "x": 90, "y": 86}]}: soft colour blobs over a base colour; 4 points, x/y in %, spread 40–70.
-- Noise: {"type": "noise", "opacity": 0.15}: film grain, put last (on top of a gradient); 0.1–0.2 is plenty.
+- Noise: {"type": "noise", "opacity": 0.15}: film grain, put last (on top of a gradient); 0.08–0.15 is plenty.
 - Image: {"type": "image", "src": "https://…", "fit": "cover" | "contain" | "fill" | "tile"}
 
 ## Text
@@ -259,7 +259,7 @@ Before building, name to yourself the format, the audience and the energy (calm,
 - Roles: ground (70–90% of the area), surface (one small step from the ground), ink, muted (secondary text in the same face, 14px or more, still 4.5:1), one accent under about 5% of the screen (the main action and one detail), and text on the accent. Use 2–3 core colours plus that accent; headlines stay in the ink colour.
 - A whole section on another ground is the strongest colour move; neighbours differ in lightness. A near-black primary button is valid. Dark themes need a reason and get depth from lighter surfaces, not glow.
 - Contrast: body text 4.5:1, large text 3:1, borders and focus rings 3:1. Check the lightest spot of a gradient or image behind text, or add a 30–55% ink scrim.
-- Surfaces: only floating things (menus, dialogs, a card over an image) get shadows. Resting cards and panels get a tone step or a border, never both. Glass on at most one layer.
+- Surfaces: only floating things (menus, dialogs, a card over an image) get shadows. Resting cards and panels get a tone step or a border, never both.
 - Status colours are pale tints with dark text of the same hue (#dcfae5 with #04250e); with a brand kit, use var(--color-success) and var(--color-danger) for positive and error states (badges, input errors, destructive buttons).
 
 ## Imagery without photos (in this order)
@@ -268,9 +268,15 @@ Before building, name to yourself the format, the audience and the energy (calm,
 2. Type and colour alone: poster-scale statements and full colour fields. This is a complete design, not a fallback.
 3. Drawings of the subject built from frames, in one flat style, palette colours, drawn large.
 4. For software, believable UI fragments: real labels, numbers that add up, one selected state, no device frame.
-5. One gradient or mesh with noise 0.1–0.2 (the brand's presets first).
+5. One mesh or gradient with noise 0.08–0.15 (the brand's presets first): the design's one rich visual.
 
 Never draw grey "image here" boxes, icons in tinted squares or decorative orbs.
+
+## Effects
+
+- Liquid glass: one floating layer at most, only over a colourful ground (photo, mesh). Linear fill 160° #ffffff47 → #ffffff14 (#ffffff1f → #ffffff0a on dark), backdropBlur 24, "backdropSaturate": 180 (%), border 1px #ffffff59, radius 24, shadows (x y blur spread) inset 0 1 0 0 #ffffff80, inset 0 -1 0 0 #ffffff1a, 0 8 32 -8 #0f172a2e. It frosts but cannot refract.
+- Metal logo versions (save_logo "metal": true) only when the user asks: dark, premium uses, never the main logo.
+- No animated shader backgrounds; suggest a pre-rendered video.
 
 ## Copy and honesty
 
@@ -705,6 +711,7 @@ ${JSON.stringify(EXAMPLE)}`;
           svg: { type: 'string', description: 'SVG markup instead of node_id.' },
           name: { type: 'string', description: 'Logo name, usually the brand name.' },
           symbol_svg: { type: 'string', description: 'Optional: the mark alone (no name) as SVG, for app icons and favicons.' },
+          metal: { type: 'boolean', description: 'Also save a chrome version; only when the user asks.' },
         },
         required: ['name'],
         additionalProperties: false,

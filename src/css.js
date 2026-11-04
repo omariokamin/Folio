@@ -236,8 +236,11 @@ window.Folio = window.Folio || {};
     if (st.blur) filters.push(`blur(${px(st.blur)})`);
     filters.push(...adjustCss(st.adjust));
     if (filters.length) out.filter = filters.join(' ');
-    if (st.backdropBlur) {
-      out['backdrop-filter'] = `blur(${px(st.backdropBlur)})`;
+    const backdrop = [];
+    if (st.backdropBlur) backdrop.push(`blur(${px(st.backdropBlur)})`);
+    if (st.backdropSaturate != null && st.backdropSaturate !== 100) backdrop.push(`saturate(${r2(st.backdropSaturate)}%)`);
+    if (backdrop.length) {
+      out['backdrop-filter'] = backdrop.join(' ');
       out['-webkit-backdrop-filter'] = out['backdrop-filter'];
     }
     if (st.blend && st.blend !== 'normal') out['mix-blend-mode'] = st.blend;

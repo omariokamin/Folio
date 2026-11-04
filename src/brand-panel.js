@@ -930,8 +930,8 @@ window.Folio = window.Folio || {};
     return added;
   }
 
-  const VERSION_LABELS = { 'on-light': 'On light', 'on-dark': 'On dark', mono: 'Mono', symbol: 'Symbol' };
-  const baseLogoName = (l) => String(l.name || 'Logo').replace(/\s+[—–-]\s+(on light|on dark|mono|one colour|symbol)$/i, '') || 'Logo';
+  const VERSION_LABELS = { 'on-light': 'On light', 'on-dark': 'On dark', mono: 'Mono', metal: 'Metal', symbol: 'Symbol' };
+  const baseLogoName = (l) => String(l.name || 'Logo').replace(/\s+[—–-]\s+(on light|on dark|mono|one colour|metal|symbol)$/i, '') || 'Logo';
 
   /** The sanitized SVG behind a logo, or null (raster / external / broken). */
   function logoSvg(l) {
@@ -946,13 +946,15 @@ window.Folio = window.Folio || {};
   /**
    * Add (or refresh, keeping ids so placed copies stay linked) the on-light / on-dark / mono versions of
    * `svg` in one group. `base` is an existing logo that becomes the group's on-light version.
+   * The metal version is opt-in: made when `withMetal`, refreshed when the group already has one.
    */
-  function saveVersions(brandId, svg, name, base) {
+  function saveVersions(brandId, svg, name, base, withMetal) {
     const S = Folio.svg;
     const group = (base && base.group) || 'g_' + Math.random().toString(36).slice(2, 8);
     const { width, height } = S.size(svg);
     const vs = S.versions(svg, B().get(brandId));
     const logos = B().get(brandId).logos;
+    if (!withMetal && !logos.some((l) => l.group === group && l.version === 'metal')) delete vs.metal;
     const fresh = {};
     const updated = logos.map((l) => {
       if (base && l.id === base.id) return { ...l, group, version: l.version || 'on-light' };
@@ -984,11 +986,11 @@ window.Folio = window.Folio || {};
     }
   }
 
-  function makeVersions(brandId, base) {
+  function makeVersions(brandId, base, withMetal) {
     const svg = logoSvg(base);
     if (!svg) return toast('Versions can be made from SVG logos only.', 'error');
     try {
-      saveVersions(brandId, svg, baseLogoName(base), base);
+      saveVersions(brandId, svg, baseLogoName(base), base, withMetal);
       commit('make logo versions');
     } catch (e) {
       toast(e.message || 'Could not make versions of that logo.', 'error');
@@ -1009,7 +1011,7 @@ window.Folio = window.Folio || {};
       { class: 'bp-logo', dataset: { id: l.id, version: l.version || '' } },
       h(
         'button',
-        { type: 'button', class: 'bp-logo__thumb' + (l.version === 'on-dark' ? ' is-dark' : ''), title: `Place “${l.name}” on the canvas`, onClick: () => insertLogo(l) },
+        { type: 'button', class: 'bp-logo__thumb' + (l.version === 'on-dark' || l.version === 'metal' ? ' is-dark' : ''), title: `Place “${l.name}” on the canvas`, onClick: () => insertLogo(l) },
         h('img', { src: l.src, alt: l.name, draggable: 'false' })
       ),
       nameEl,
@@ -1049,6 +1051,9 @@ window.Folio = window.Folio || {};
             h('span', { class: 'bp-logo-group__name', title: baseLogoName(base) }, baseLogoName(base)),
             Folio.svg && Folio.svg.decode(base.src)
               ? h('button', { type: 'button', class: 'f-btn f-btn--ghost bp-logo-group__make', title: 'Rebuild the on-dark and mono versions from the on-light one', onClick: () => makeVersions(b.id, base) }, 'Make versions')
+              : null,
+            Folio.svg && Folio.svg.decode(base.src) && !list.some((l) => l.version === 'metal')
+              ? h('button', { type: 'button', class: 'f-btn f-btn--ghost bp-logo-group__make bp-logo-group__metal', title: 'Add a polished-metal version (for dark, premium uses; not the main logo)', onClick: () => makeVersions(b.id, base, true) }, '+ Metal')
               : null
           ),
           h('div', { class: 'bp-logo-group__tiles' }, list.map((l) => logoTile(b, l, VERSION_LABELS[l.version] || l.name)))

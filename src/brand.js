@@ -125,7 +125,7 @@ window.Folio = window.Folio || {};
     return s.startsWith('#') ? s.toLowerCase() : s;
   }
 
-  const LOGO_VERSIONS = ['on-light', 'on-dark', 'mono', 'symbol'];
+  const LOGO_VERSIONS = ['on-light', 'on-dark', 'mono', 'metal', 'symbol'];
   /** A logo's optional version label and the group linking the versions of one logo. */
   function logoMeta(l) {
     const out = {};

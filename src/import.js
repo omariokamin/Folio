@@ -511,8 +511,13 @@ window.Folio = window.Folio || {};
       style.opacity = cs.opacity === '' ? 1 : r2(op);
       const fm = String(cs.filter).match(/blur\(([\d.]+)px\)/);
       if (fm) style.blur = num(fm[1]);
-      const bm = String(cs.backdropFilter || cs.webkitBackdropFilter || '').match(/blur\(([\d.]+)px\)/);
+      const bf = String(cs.backdropFilter || cs.webkitBackdropFilter || '');
+      const bm = bf.match(/blur\(([\d.]+)px\)/);
       if (bm) style.backdropBlur = num(bm[1]);
+      // computed style may give saturate(1.8) or saturate(180%)
+      const sm = bf.match(/saturate\(([\d.]+)(%?)\)/);
+      const sat = sm ? Math.round(num(sm[1]) * (sm[2] ? 1 : 100)) : 100;
+      if (sat !== 100) style.backdropSaturate = sat;
       if (cs.mixBlendMode && cs.mixBlendMode !== 'normal') style.blend = cs.mixBlendMode;
       style.clip = cs.overflowX !== 'visible' || cs.overflowY !== 'visible';
       return { style, fb };
@@ -538,7 +543,7 @@ window.Folio = window.Folio || {};
     }
 
     const visual = (st) =>
-      st.fills.length || st.border.width || st.shadows.length || st.opacity < 1 || st.blur || st.backdropBlur || st.blend !== 'normal' || st.clip || st.rotation;
+      st.fills.length || st.border.width || st.shadows.length || st.opacity < 1 || st.blur || st.backdropBlur || st.backdropSaturate || st.blend !== 'normal' || st.clip || st.rotation;
 
     // ---------- items of an element: child elements and runs of text ----------
     function itemsOf(el) {

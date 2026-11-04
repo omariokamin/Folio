@@ -4,7 +4,7 @@
  *   Folio.svg.sanitize(markup)        -> { svg, warnings }  (throws an Error with a plain message when unusable)
  *   Folio.svg.embedFonts(svg, warnings?) -> Promise<svg>    (@font-face with inlined font files, for <img> use)
  *   Folio.svg.recolor(svg, fn)        -> svg with every paint replaced by fn(colour)
- *   Folio.svg.versions(svg, brand?)   -> { 'on-light', 'on-dark', 'mono' }
+ *   Folio.svg.versions(svg, brand?)   -> { 'on-light', 'on-dark', 'mono', 'metal' }
  *   Folio.svg.toDataUrl(svg) / size(svg) / decode(src)
  *   Folio.svg.fromNode(nodeId, warnings?) -> Promise<svg>   (a Folio layer drawn as real vectors)
  *
@@ -20,11 +20,25 @@ window.Folio = window.Folio || {};
   const MAX_DEPTH = 64;
 
   const canon = (list) => new Map(list.map((n) => [n.toLowerCase(), n]));
-  const ELEMENTS = canon(['svg', 'g', 'path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon', 'text', 'tspan', 'defs', 'linearGradient', 'radialGradient', 'stop', 'clipPath', 'mask', 'use', 'title', 'desc']);
+  // filter primitives that only compute from the shape itself; never feImage (fetches) or anything with an href
+  const FILTER_ELS = ['filter', 'feGaussianBlur', 'feOffset', 'feSpecularLighting', 'feDiffuseLighting', 'feDistantLight', 'fePointLight', 'feComposite', 'feMerge', 'feMergeNode', 'feColorMatrix', 'feTurbulence', 'feDisplacementMap', 'feFlood', 'feBlend'];
+  const ELEMENTS = canon(['svg', 'g', 'path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon', 'text', 'tspan', 'defs', 'linearGradient', 'radialGradient', 'stop', 'clipPath', 'mask', 'use', 'title', 'desc', ...FILTER_ELS]);
   const TEXTY = new Set(['text', 'tspan', 'title', 'desc']);
   const SHAPES = 'path,rect,circle,ellipse,line,polyline,polygon,text,use';
-  const STYLE_PROPS = ['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'stroke-dasharray', 'stroke-dashoffset', 'opacity', 'fill-opacity', 'stroke-opacity', 'fill-rule', 'clip-rule', 'stop-color', 'stop-opacity', 'font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing', 'text-anchor', 'dominant-baseline', 'clip-path', 'mask'];
-  const ATTRS = canon([...STYLE_PROPS, 'transform', 'd', 'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r', 'rx', 'ry', 'fx', 'fy', 'dx', 'dy', 'width', 'height', 'points', 'offset', 'gradientUnits', 'gradientTransform', 'spreadMethod', 'clipPathUnits', 'maskUnits', 'maskContentUnits', 'preserveAspectRatio', 'id', 'viewBox', 'href']);
+  const STYLE_PROPS = ['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'stroke-dasharray', 'stroke-dashoffset', 'opacity', 'fill-opacity', 'stroke-opacity', 'fill-rule', 'clip-rule', 'stop-color', 'stop-opacity', 'font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing', 'text-anchor', 'dominant-baseline', 'clip-path', 'mask', 'filter', 'flood-color', 'flood-opacity', 'lighting-color', 'color-interpolation-filters'];
+  // numeric filter attributes: [min, max, how many numbers]; clamped so a hostile value can't freeze rendering
+  const NUM = { stdDeviation: [0, 100, 2], numOctaves: [0, 4, 1], baseFrequency: [0, 2, 2], seed: [0, 1e6, 1], surfaceScale: [-50, 50, 1], specularConstant: [0, 10, 1], specularExponent: [1, 128, 1], diffuseConstant: [0, 10, 1], azimuth: [-360, 360, 1], elevation: [-360, 360, 1], z: [-1e4, 1e4, 1], k1: [-10, 10, 1], k2: [-10, 10, 1], k3: [-10, 10, 1], k4: [-10, 10, 1], scale: [-200, 200, 1], values: [-100, 100, 20], 'flood-opacity': [0, 1, 1] };
+  const INPUT = /^(SourceGraphic|SourceAlpha)$/;
+  const ENUM = { operator: /^(over|in|out|atop|xor|arithmetic)$/, mode: /^(normal|multiply|screen|overlay|darken|lighten|color-dodge|color-burn|hard-light|soft-light|difference|exclusion|hue|saturation|color|luminosity)$/, type: /^(matrix|saturate|hueRotate|luminanceToAlpha|fractalNoise|turbulence)$/, stitchTiles: /^(stitch|noStitch)$/, xChannelSelector: /^[RGBA]$/, yChannelSelector: /^[RGBA]$/, filterUnits: /^(userSpaceOnUse|objectBoundingBox)$/, primitiveUnits: /^(userSpaceOnUse|objectBoundingBox)$/, 'color-interpolation-filters': /^(auto|sRGB|linearRGB)$/ };
+  const ATTRS = canon([...STYLE_PROPS, ...Object.keys(NUM), ...Object.keys(ENUM), 'in', 'in2', 'result', 'transform', 'd', 'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r', 'rx', 'ry', 'fx', 'fy', 'dx', 'dy', 'width', 'height', 'points', 'offset', 'gradientUnits', 'gradientTransform', 'spreadMethod', 'clipPathUnits', 'maskUnits', 'maskContentUnits', 'preserveAspectRatio', 'id', 'viewBox', 'href']);
+  const MAX_FILTER_PRIMITIVES = 64;
+  /** A filter region or light position (x/y/width/height on filter elements): a clamped number or percentage. */
+  function region(v) {
+    const m = /^\s*(-?[\d.]+(?:e[-+]?\d+)?)(%?)\s*$/i.exec(v);
+    if (!m || !isFinite(+m[1])) return null;
+    const lim = m[2] ? 500 : 1e4;
+    return Math.min(lim, Math.max(-lim, +m[1])) + m[2];
+  }
   const PAINTS = ['fill', 'stroke', 'stop-color'];
   const URL_REF = /^url\(\s*(['"]?)#[A-Za-z_][\w.:-]*\1\s*\)$/i;
   const ID_RE = /^[A-Za-z_][\w.:-]{0,63}$/;
@@ -60,6 +74,8 @@ window.Folio = window.Folio || {};
   function cleanPaint(v) {
     v = v.trim();
     if (/^(none|currentColor|transparent)$/i.test(v) || URL_REF.test(v)) return v;
+    const fb = /^(url\(\s*(['"]?)#[A-Za-z_][\w.:-]*\2\s*\))\s+(.+)$/i.exec(v); // url(#id) with a fallback colour
+    if (fb) return cleanPaint(fb[3]) && !/^url/i.test(fb[3]) ? `${fb[1]} ${cleanPaint(fb[3])}` : null;
     if (/^var\(/i.test(v)) v = (Folio.brand && Folio.brand.resolveColor && Folio.brand.resolveColor(v)) || '';
     if (!v || FETCHY.test(v) || /var\(|[;{}]/i.test(v)) return null;
     return CSS.supports('color', v) ? v : null;
@@ -70,8 +86,17 @@ window.Folio = window.Folio || {};
     v = String(v);
     if (PAINTS.includes(name)) return cleanPaint(v);
     if (name === 'href') return /^\s*#[A-Za-z_][\w.:-]*\s*$/.test(v) ? v.trim() : null;
-    if (name === 'clip-path' || name === 'mask') return URL_REF.test(v.trim()) || v.trim() === 'none' ? v.trim() : null;
-    if (name === 'id') return ID_RE.test(v) ? v : null;
+    if (name === 'clip-path' || name === 'mask' || name === 'filter') return URL_REF.test(v.trim()) || v.trim() === 'none' ? v.trim() : null;
+    if (name === 'id' || name === 'result') return ID_RE.test(v) ? v : null;
+    if (name === 'in' || name === 'in2') return INPUT.test(v.trim()) || (ID_RE.test(v.trim()) && !/^(Background(Image|Alpha)|FillPaint|StrokePaint)$/.test(v.trim())) ? v.trim() : null;
+    if (name === 'flood-color' || name === 'lighting-color') return /^url/i.test(v.trim()) ? null : cleanPaint(v);
+    if (ENUM[name]) return ENUM[name].test(v.trim()) ? v.trim() : null;
+    if (NUM[name]) {
+      const [lo, hi, count] = NUM[name];
+      const n = v.trim().split(/[\s,]+/).map(Number);
+      if (!n.length || n.length > count || !n.every(isFinite)) return null;
+      return n.map((x) => Math.min(hi, Math.max(lo, name === 'numOctaves' ? Math.round(x) : x))).join(' ');
+    }
     if (name === 'font-family' && /var\(/i.test(v) && Folio.brand && Folio.fonts) v = Folio.fonts.stack(Folio.brand.resolveFont(v.trim()));
     return FETCHY.test(v) || /var\(/i.test(v) ? null : v;
   }
@@ -140,11 +165,11 @@ window.Folio = window.Folio || {};
           });
           continue;
         }
-        if (!name) {
+        if (!name || (name === 'href' && !/^(use|linearGradient|radialGradient)$/.test(to.localName))) {
           droppedAttrs.add(a.name);
           continue;
         }
-        const v = cleanValue(name, a.value);
+        const v = FILTER_ELS.includes(to.localName) && /^(x|y|width|height)$/.test(name) ? region(a.value) : cleanValue(name, a.value);
         if (v == null) droppedAttrs.add(`${a.name}="${a.value.slice(0, 40)}"`);
         else to.setAttribute(name, v);
       }
@@ -195,6 +220,21 @@ window.Folio = window.Folio || {};
       if (!t || t.localName === 'use' || t.querySelector('use') || t.contains(u)) {
         u.remove();
         dropped.add('use (missing or nested target)');
+      }
+    });
+
+    // filters: a bounded number of primitives, and filter= only where it names a <filter> in this file
+    const prims = root.querySelectorAll(FILTER_ELS.slice(1).join(','));
+    if (prims.length > MAX_FILTER_PRIMITIVES) {
+      root.querySelectorAll('filter').forEach((f) => f.remove());
+      dropped.add(`filters (more than ${MAX_FILTER_PRIMITIVES} steps)`);
+    }
+    const filterIds = new Set(Array.from(root.querySelectorAll('filter[id]')).map((f) => f.getAttribute('id')));
+    root.querySelectorAll('[filter]').forEach((e) => {
+      const m = /#([^'")\s]+)/.exec(e.getAttribute('filter'));
+      if (m && !filterIds.has(m[1])) {
+        e.removeAttribute('filter');
+        dropped.add('filter (missing target)');
       }
     });
 
@@ -314,6 +354,61 @@ window.Folio = window.Folio || {};
     return serialize(root);
   }
 
+  const CHROME = [[0, '#fdfdfd'], [0.3, '#b9bec6'], [0.5, '#f4f5f7'], [0.72, '#5e646e'], [1, '#d9dce1']];
+
+  /** Polished metal: every paint → one chrome gradient, under a specular sheen and a dark rim that holds the edge on white. */
+  function metal(svg) {
+    const root = parse(svg);
+    const doc = root.ownerDocument;
+    const mk = (tag, attrs, parent) => {
+      const el = parent.appendChild(doc.createElementNS(NS, tag));
+      Object.keys(attrs).forEach((k) => el.setAttribute(k, attrs[k]));
+      return el;
+    };
+    const uid = (base) => {
+      let id = base;
+      while (root.querySelector(`[id="${id}"]`)) id += '_';
+      return id;
+    };
+    const [gid, fid] = [uid('metal-chrome'), uid('metal-shine')];
+    const paints = [];
+    [root, ...root.querySelectorAll('*')].forEach((el) => !el.closest('mask') && ['fill', 'stroke'].forEach((p) => el.hasAttribute(p) && paints.push([el, p])));
+    const light = (v) => (lightness(v) || 0) > 0.9;
+    const solid = paints.filter(([el, p]) => !/^(none|transparent)$/i.test(el.getAttribute(p).trim()));
+    // near-white knockouts (text on a badge) become dark steel when there is metal around them, so they stay readable
+    const knockout = solid.some(([el, p]) => light(el.getAttribute(p))) && (!root.hasAttribute('fill') || solid.some(([el, p]) => !light(el.getAttribute(p))));
+    // the fallback colour paints shapes with a zero-size box (a straight line), where a bounding-box gradient draws nothing
+    const chrome = `url(#${gid}) #c3c7cd`;
+    solid.forEach(([el, p]) => el.setAttribute(p, knockout && light(el.getAttribute(p)) ? '#2b2f36' : chrome));
+    if (!root.hasAttribute('fill')) root.setAttribute('fill', chrome);
+
+    const vb = nums(root.getAttribute('viewBox'));
+    const s = r2(Math.max(0.3, Math.min(vb[2], vb[3]) * 0.02)); // bevel width follows the mark's size
+    let defs = Array.from(root.children).find((c) => c.localName === 'defs');
+    if (!defs) defs = root.insertBefore(doc.createElementNS(NS, 'defs'), root.firstChild);
+    const grad = mk('linearGradient', { id: gid, x1: 0, y1: 0, x2: 0.16, y2: 1 }, defs);
+    CHROME.forEach(([o, c]) => mk('stop', { offset: o, 'stop-color': c }, grad));
+    const f = mk('filter', { id: fid, x: '-5%', y: '-5%', width: '110%', height: '115%', 'color-interpolation-filters': 'sRGB' }, defs);
+    mk('feGaussianBlur', { in: 'SourceAlpha', stdDeviation: s, result: 'blur' }, f);
+    const spec = mk('feSpecularLighting', { in: 'blur', surfaceScale: 3, specularConstant: 0.9, specularExponent: 22, 'lighting-color': '#ffffff', result: 'spec' }, f);
+    mk('feDistantLight', { azimuth: 235, elevation: 48 }, spec);
+    mk('feComposite', { in: 'spec', in2: 'SourceAlpha', operator: 'in', result: 'shine' }, f);
+    mk('feComposite', { in: 'SourceAlpha', in2: 'blur', operator: 'arithmetic', k2: 1, k3: -1, result: 'edge' }, f);
+    mk('feFlood', { 'flood-color': '#1b1e24', 'flood-opacity': 0.85 }, f);
+    mk('feComposite', { in2: 'edge', operator: 'in', result: 'rim' }, f);
+    // a soft contact shadow: invisible on dark grounds, it keeps the bright chrome from dissolving into white
+    mk('feOffset', { in: 'blur', dy: r2(s * 0.6), result: 'drop' }, f);
+    mk('feFlood', { 'flood-color': '#0b0d12', 'flood-opacity': 0.4 }, f);
+    mk('feComposite', { in2: 'drop', operator: 'in', result: 'shadow' }, f);
+    const merge = mk('feMerge', {}, f);
+    ['shadow', 'SourceGraphic', 'rim', 'shine'].forEach((i) => mk('feMergeNode', { in: i }, merge));
+    const g = doc.createElementNS(NS, 'g');
+    g.setAttribute('filter', `url(#${fid})`);
+    Array.from(root.childNodes).forEach((c) => !/^(defs|title|desc|style)$/.test(c.localName) && g.appendChild(c));
+    root.appendChild(g);
+    return serialize(root);
+  }
+
   function versions(svg, brand) {
     if (brand === undefined) brand = Folio.brand && Folio.brand.active ? Folio.brand.active() : null;
     const col = (id) => {
@@ -345,6 +440,7 @@ window.Folio = window.Folio || {};
         const l = lightness(c);
         return l != null && l > LIGHT ? '#ffffff' : ink;
       }),
+      metal: metal(svg),
     };
   }
 

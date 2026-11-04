@@ -104,6 +104,19 @@ Folio has no stock photos, so Claude picks from this list, in order:
 
 Claude never draws grey "image here" boxes, icons in tinted squares or decorative orbs.
 
+### Effects
+
+Effects popular in WebGL libraries, rebuilt in plain CSS and SVG so exports stay ordinary HTML.
+
+- **Liquid glass** goes on one floating layer at most (a nav bar, a card over a picture), and only
+  over something colourful. Over flat white it just looks grey. It frosts and saturates what is behind
+  it; it can't bend it the way Apple's glass does.
+- **A mesh gradient with a little grain** is the one rich visual of a design, not a texture on every
+  section.
+- **Metal logos** are an extra version of a logo, made only when you ask. They suit dark, premium
+  moments (a launch slide, packaging); the flat logo stays the main one.
+- **Animated shader backgrounds** aren't possible in Folio; for motion, use a pre-rendered video.
+
 ## 8. Format playbooks
 
 - **Landing page:** the first screen answers the visitor's first question. It has a headline, a

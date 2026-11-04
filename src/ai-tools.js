@@ -21,7 +21,7 @@ window.Folio = window.Folio || {};
   const TYPES = ['frame', 'text', 'image'];
   const NODE_KEYS = ['type', 'name', 'x', 'y', 'width', 'height', 'sizing', 'layout', 'style', 'text', 'image', 'visible', 'locked', 'children'];
   const IGNORED_KEYS = ['id', 'parent', 'childCount', 'ref', 'key'];
-  const STYLE_KEYS = ['fills', 'radius', 'border', 'shadows', 'opacity', 'blur', 'backdropBlur', 'blend', 'clip', 'rotation', 'adjust'];
+  const STYLE_KEYS = ['fills', 'radius', 'border', 'shadows', 'opacity', 'blur', 'backdropBlur', 'backdropSaturate', 'blend', 'clip', 'rotation', 'adjust'];
   const LAYOUT_KEYS = ['mode', 'direction', 'wrap', 'gap', 'justify', 'align', 'padding'];
   const TEXT_KEYS = ['content', 'font', 'size', 'weight', 'lineHeight', 'letterSpacing', 'color', 'align', 'transform', 'italic', 'decoration'];
   const IMAGE_KEYS = ['src', 'fit'];
@@ -824,6 +824,11 @@ window.Folio = window.Folio || {};
           if (n != null) out[k] = n;
           break;
         }
+        case 'backdropSaturate': {
+          const n = num(typeof val === 'string' ? val.replace(/^saturate\(/, '') : val, ctx, k, 0, 400);
+          if (n != null) out[k] = n;
+          break;
+        }
         case 'blend': {
           const b = oneOf(val, BLENDS, { 'pass-through': 'normal', passthrough: 'normal' }, ctx, 'blend');
           if (b) out.blend = b;
@@ -1406,6 +1411,7 @@ window.Folio = window.Folio || {};
     if (st.opacity != null && st.opacity !== 1) o.opacity = st.opacity;
     if (st.blur) o.blur = st.blur;
     if (st.backdropBlur) o.backdropBlur = st.backdropBlur;
+    if (st.backdropSaturate != null && st.backdropSaturate !== 100) o.backdropSaturate = st.backdropSaturate;
     if (st.blend && st.blend !== 'normal') o.blend = st.blend;
     if (st.clip) o.clip = true;
     if (st.rotation) o.rotation = st.rotation;
@@ -3851,10 +3857,11 @@ window.Folio = window.Folio || {};
         return fail(`Folio could not create a brand kit for the logo: ${errText(e)}`, 'Logo not saved');
       }
     }
-    if (listOf(brand, 'logos').length + (sym ? 4 : 3) > MAX_KIT_LOGOS) return fail(`${q(brand.name)} already holds ${listOf(brand, 'logos').length} logos. Remove old ones first (set_brand logos [{"id": …, "delete": true}]). Nothing was saved.`, 'Too many logos');
+    if (listOf(brand, 'logos').length + 3 + (sym ? 1 : 0) + (input.metal === true ? 1 : 0) > MAX_KIT_LOGOS) return fail(`${q(brand.name)} already holds ${listOf(brand, 'logos').length} logos. Remove old ones first (set_brand logos [{"id": …, "delete": true}]). Nothing was saved.`, 'Too many logos');
 
     const vers = safe(() => V.versions(c.svg, brand), null) || {};
     const list = [['on-light', vers['on-light'] || c.svg, 'on light'], ['on-dark', vers['on-dark'], 'on dark'], ['mono', vers.mono, 'one colour']];
+    if (input.metal === true) list.push(['metal', vers.metal, 'metal']);
     if (sym) list.push(['symbol', sym.svg, 'symbol']);
     const group = newId('g_', new Set(listOf(brand, 'logos').map((l) => l.group).filter(Boolean)));
     const logos = {};
@@ -3873,7 +3880,7 @@ window.Folio = window.Folio || {};
     }
     if (!Object.keys(logos).length) return fail(`No logo version could be saved. ${warnings.join(' ')}`, 'Logo not saved');
     const out = { brand: `${brand.id} ${q(brand.name)}`, logos };
-    out.note = `Show a version with an image node {"image": {"src": "${logos['on-light'] || Object.values(logos)[0]}", "fit": "contain"}} and a width or height; use on-dark on dark grounds and mono for one-colour uses.`;
+    out.note = `Show a version with an image node {"image": {"src": "${logos['on-light'] || Object.values(logos)[0]}", "fit": "contain"}} and a width or height; use on-dark on dark grounds and mono for one-colour uses${logos.metal ? '; metal only for dark, premium moments' : ''}.`;
     if (createdKit) out.createdKit = `No brand kit was active, so a new kit ${q(brand.name)} was made the document's brand, with placeholder colours and fonts. Tell the user, and set its colours and fonts with set_brand.`;
     if (warnings.length) out.warnings = warnings.slice(0, MAX_WARNINGS);
     return result(out, `Saved logo ${q(name)} to ${q(brand.name)}`, []);

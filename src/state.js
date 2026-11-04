@@ -53,6 +53,7 @@ window.Folio = window.Folio || {};
         opacity: 1,
         blur: 0,
         backdropBlur: 0,
+        backdropSaturate: 100,
         blend: 'normal',
         clip: false,
         rotation: 0,

@@ -176,7 +176,8 @@ previous colours").
 three different ideas as real vector (SVG) logos on a **Logo concepts** artboard. Each card shows the
 logo large, at 64, 32 and 16 pixels tall, and on a dark background, so you can see whether it still
 works small. Pick one ("go with the second, in dark green") and Claude saves it to your brand kit in
-on-light, on-dark and one-colour versions, ready to place on any design. Claude only designs logos
+on-light, on-dark and one-colour versions, ready to place on any design (ask for "a metal version" to
+get a polished chrome one too). Claude only designs logos
 when you ask. Before using one for real, check that nobody else has registered something similar
 (a trademark search).
 

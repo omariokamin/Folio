@@ -1932,17 +1932,23 @@ window.Folio = window.Folio || {};
     { x: 82, y: 88 },
     { x: 18, y: 82 },
   ];
+  // the shader-style five (Aurora..Chrome) carry their own spread and pair with a noise fill at 0.08-0.15
   const MESH_PRESETS = [
-    { name: 'Aurora', base: '#0b1026', points: ['#6d5efc', '#22d3ee', '#a855f7', '#10b981'] },
+    { name: 'Nebula', base: '#0b1026', points: ['#6d5efc', '#22d3ee', '#a855f7', '#10b981'] },
     { name: 'Peach', base: '#ffe8dc', points: ['#ff8a65', '#ffd166', '#f472b6', '#fdba74'] },
-    { name: 'Lagoon', base: '#e6fbf7', points: ['#14b8a6', '#60a5fa', '#a7f3d0', '#3b82f6'] },
+    { name: 'Mint', base: '#e6fbf7', points: ['#14b8a6', '#60a5fa', '#a7f3d0', '#3b82f6'] },
     { name: 'Sunset', base: '#2a0a3d', points: ['#ff6b6b', '#f59e0b', '#ec4899', '#8b5cf6'] },
     { name: 'Pastel', base: '#fdf4ff', points: ['#c4b5fd', '#fde68a', '#93c5fd', '#f9a8d4'] },
+    { name: 'Aurora', base: '#03111a', spread: 52, points: ['#1ee3a1', '#0b6f7a', '#8cf5c9', '#c2418a'] },
+    { name: 'Dusk', base: '#2a2033', spread: 62, points: ['#ff9b5e', '#e0557b', '#ffd08a', '#3f5a86'] },
+    { name: 'Lagoon', base: '#dff5ee', spread: 60, points: ['#00a3a0', '#7fdcc6', '#f3e4b0', '#1f6fae'] },
+    { name: 'Ember', base: '#170705', spread: 52, points: ['#ff5b1f', '#ffb12e', '#a3121d', '#ff8a4c'] },
+    { name: 'Chrome', base: '#c9ced5', spread: 56, points: ['#fbfcfd', '#7d8590', '#eef1f4', '#4f5660'] },
   ];
   const meshFrom = (pr, f) => ({
     type: 'mesh',
     base: pr.base,
-    spread: (f && f.spread) || 60,
+    spread: pr.spread || (f && f.spread) || 60,
     points: pr.points.map((c, i) => ({ color: c, x: f && f.points && f.points[i] ? f.points[i].x : MESH_POS[i].x, y: f && f.points && f.points[i] ? f.points[i].y : MESH_POS[i].y })),
     visible: f ? f.visible !== false : true,
   });
@@ -2098,8 +2104,25 @@ window.Folio = window.Folio || {};
         });
         return b;
       }
+      case 'mesh': {
+        // "+ grain": a noise fill directly above this mesh (the swatch opens the editor)
+        const grained = (arr) => !!arr && !!arr[i + 1] && arr[i + 1].type === 'noise';
+        return toggleBtn({
+          label: '+ grain',
+          title: 'Grain on top of the mesh',
+          cls: 'ins-quick-btn ins-grain',
+          get: () => grained(P().style.fills),
+          set: (v) =>
+            listOp('fills', (arr) => {
+              if (!arr[i] || arr[i].type !== 'mesh' || grained(arr) === v) return false;
+              if (v) arr.splice(i + 1, 0, { type: 'noise', opacity: 0.12, visible: true });
+              else arr.splice(i + 1, 1);
+            }),
+          commitLabel: 'Mesh grain',
+        });
+      }
       default: {
-        const b = h('button', { type: 'button', class: 'f-btn f-btn--ghost ins-quick-btn ins-quick-label', title: 'Edit' }, f.type === 'mesh' ? 'Mesh gradient' : 'Radial');
+        const b = h('button', { type: 'button', class: 'f-btn f-btn--ghost ins-quick-btn ins-quick-label', title: 'Edit' }, 'Radial');
         b.addEventListener('click', () => toggleFill(i));
         return b;
       }
@@ -2905,6 +2928,30 @@ window.Folio = window.Folio || {};
   }
 
   // ---------------- effects ----------------
+  /** Liquid glass preset (SPEC v0.9): one undo step over every selected frame. */
+  function glassBtn(label, title, [top, bottom]) {
+    const b = h('button', { type: 'button', class: 'f-btn ins-glass__btn', title: title + ' — applies to the selected frames' }, icon('sparkle'), h('span', {}, label));
+    b.addEventListener('click', () => {
+      const inset = (y, color) => ({ x: 0, y, blur: 0, spread: 0, color, inset: true, visible: true });
+      patchSel(
+        {
+          style: {
+            fills: [{ type: 'linear', angle: 160, stops: [{ color: top, pos: 0 }, { color: bottom, pos: 100 }], visible: true }],
+            backdropBlur: 24,
+            backdropSaturate: 180,
+            border: { width: 1, color: '#ffffff59', style: 'solid' },
+            shadows: [inset(1, '#ffffff80'), inset(-1, '#ffffff1a'), { x: 0, y: 8, blur: 32, spread: -8, color: '#0f172a2e', inset: false, visible: true }],
+            radius: brandRadius('lg') != null ? radiusRef('lg') : 24,
+          },
+        },
+        (n) => n.type === 'frame'
+      );
+      commit(label);
+      b.blur();
+    });
+    return b;
+  }
+
   function buildEffects(p) {
     const A = (k, d) => {
       const a = P().style.adjust;
@@ -2921,6 +2968,8 @@ window.Folio = window.Folio || {};
       { collapsed: true },
       propRow('Blur', numField({ key: 'blur', title: 'Layer blur (filter: blur)', get: () => P().style.blur || 0, set: (v) => patchSel({ style: { blur: v } }), min: 0, precision: 1, suffix: 'px', commitLabel: 'Blur' })),
       propRow('Backdrop blur', numField({ key: 'bblur', title: 'Backdrop blur (frosted glass)', get: () => P().style.backdropBlur || 0, set: (v) => patchSel({ style: { backdropBlur: v } }), min: 0, precision: 1, suffix: 'px', commitLabel: 'Backdrop blur' })),
+      propRow('Backdrop sat.', numField({ key: 'bsat', title: 'Backdrop saturation (makes glass glow with the colours behind it)', get: () => (P().style.backdropSaturate != null ? P().style.backdropSaturate : 100), set: (v) => patchSel({ style: { backdropSaturate: v } }), min: 0, max: 400, suffix: '%', commitLabel: 'Backdrop saturation' })),
+      p.type === 'frame' ? h('div', { class: 'f-row ins-glass' }, glassBtn('Liquid glass', 'Frosted glass for light or colourful grounds', ['#ffffff47', '#ffffff14']), glassBtn('Dark glass', 'Fainter glass for dark grounds', ['#ffffff1f', '#ffffff0a'])) : null,
       h('div', { class: 'f-row ins-subhead' }, h('span', { class: 'f-label' }, 'Adjustments'), h('span', { class: 'ins-grow' }), reset),
       propRow('Brightness', numField({ key: 'adj.b', title: 'Brightness', get: () => A('brightness', 100), set: setA('brightness'), min: 0, max: 300, suffix: '%', commitLabel: 'Brightness' })),
       propRow('Contrast', numField({ key: 'adj.c', title: 'Contrast', get: () => A('contrast', 100), set: setA('contrast'), min: 0, max: 300, suffix: '%', commitLabel: 'Contrast' })),

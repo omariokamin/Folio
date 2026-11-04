@@ -200,6 +200,9 @@ body.ins-scrubbing, body.ins-scrubbing * { cursor: ew-resize !important; user-se
   white-space: nowrap; overflow: hidden; max-width: 100%;
 }
 .ins-mesh-preset:hover { border-color: var(--text-2); transform: translateY(-1px); }
+.ins-glass { margin-top: 6px; }
+.ins-glass__btn { flex: 1 1 0; min-width: 0; gap: 5px; }
+.ins-glass__btn .f-icon { width: 12px; height: 12px; color: var(--accent-2); }
 
 /* ---------- images ---------- */
 .ins-thumb {
