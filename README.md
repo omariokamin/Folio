@@ -78,6 +78,9 @@ The full step-by-step guide, including troubleshooting, is in
 - **Infinite canvas** with artboards. Presets for Desktop, Laptop, Tablet, Mobile, Instagram
   Post / Portrait, Story / Reel, Facebook ad, LinkedIn banner, X post and YouTube thumbnail.
 - **Frames, rectangles, ellipses, text and images.** Draw them with the toolbar tools.
+- **Smart guides:** moving, resizing or drawing a layer snaps its edges and centre to nearby
+  layers and to its frame, with pink guide lines and distances. Turn it off with
+  **Snap to layers** in the zoom menu.
 - **Auto layout = flexbox.** Rows and columns with gap, padding, alignment and
   hug / fill / fixed sizing, exactly as the browser lays them out.
 - **Rich fills:** solid, linear, radial and conic gradients, **mesh gradients**, image fills
@@ -160,6 +163,7 @@ the full list.
 | Duplicate | `⌘D` |
 | Delete | `Delete` or `Backspace` |
 | Nudge 1px / 10px | Arrow keys / `Shift` + arrow keys |
+| Move without snapping | Hold `⌘` while dragging |
 | Wrap selection in auto layout | `⇧A` |
 | Group / Ungroup | `⌘G` / `⇧⌘G` |
 | Bring forward / Send backward | `⌘]` / `⌘[` |
