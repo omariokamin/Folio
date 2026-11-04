@@ -274,7 +274,8 @@ Never draw grey "image here" boxes, icons in tinted squares or decorative orbs.
 
 ## Effects
 
-- Liquid glass: one floating layer at most, only over a colourful ground (photo, mesh). Linear fill 160° #ffffff47 → #ffffff14 (#ffffff1f → #ffffff0a on dark), backdropBlur 24, "backdropSaturate": 180 (%), border 1px #ffffff59, radius 24, shadows (x y blur spread) inset 0 1 0 0 #ffffff80, inset 0 -1 0 0 #ffffff1a, 0 8 32 -8 #0f172a2e. It frosts but cannot refract.
+- Liquid glass: "style": {"effect": "liquid-glass"} ("dark-glass" on dark grounds) applies the full recipe (translucent fill, backdropBlur 24 + backdropSaturate 180, bright edge, inner highlights, soft shadow, brand radius-lg); fields sent alongside override it. One floating layer at most, only over a colourful ground (photo, mesh). It frosts but cannot refract.
+- Mesh presets: {"type": "mesh", "preset": "Aurora"} (Dusk, Lagoon, Ember, Chrome, Nebula, Peach, Mint, Sunset, Pastel), then {"type": "noise", "opacity": 0.12} on top for grain. With a brand kit, build the mesh from its tokens instead.
 - Metal logo versions (save_logo "metal": true) only when the user asks: dark, premium uses, never the main logo.
 - No animated shader backgrounds; suggest a pre-rendered video.
 

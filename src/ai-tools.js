@@ -566,6 +566,13 @@ window.Folio = window.Folio || {};
       ctx.warn(`${label} is not a fill object — dropped`);
       return null;
     }
+    if (f.preset != null && Folio.effects) {
+      // {"type": "mesh", "preset": "Lagoon"}: the same values as the fill editor's preset buttons; other fields still win
+      const pre = Folio.effects.mesh(String(f.preset));
+      if (!pre) ctx.warn(`${label}.preset ${str(f.preset)} is not one of ${Folio.effects.meshPresets.map((p) => p.name).join(', ')} — ignored`);
+      const { preset, ...rest } = f;
+      f = pre ? Object.assign(pre, rest, { type: 'mesh' }) : rest;
+    }
     let type = typeof f.type === 'string' ? f.type.trim().toLowerCase() : '';
     const alias = { color: 'solid', 'linear-gradient': 'linear', gradient: 'linear', 'radial-gradient': 'radial', 'conic-gradient': 'conic', 'mesh-gradient': 'mesh', grain: 'noise' };
     if (alias[type]) type = alias[type];
@@ -782,6 +789,15 @@ window.Folio = window.Folio || {};
     if (!isObj(raw)) {
       ctx.warn('style must be an object — ignored');
       return undefined;
+    }
+    if (raw.effect != null) {
+      // {"effect": "liquid-glass" | "dark-glass"}: the inspector's glass recipe; fields sent alongside override it
+      const { effect, ...rest } = raw;
+      const kind = String(effect).trim().toLowerCase();
+      const base = Folio.effects && Folio.effects.glass(kind);
+      if (!base) ctx.warn(`style.effect ${str(effect)} is not one of liquid-glass, dark-glass — ignored`);
+      else if (!own(rest, 'radius')) base.radius = Folio.brand && Folio.brand.active && Folio.brand.active() ? 'var(--radius-lg)' : 24;
+      raw = Object.assign(base || {}, rest);
     }
     const v = {};
     Object.keys(raw).forEach((k) => {

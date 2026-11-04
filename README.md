@@ -83,10 +83,11 @@ The full step-by-step guide, including troubleshooting, is in
   **Snap to layers** in the zoom menu.
 - **Auto layout = flexbox.** Rows and columns with gap, padding, alignment and
   hug / fill / fixed sizing, exactly as the browser lays them out.
-- **Rich fills:** solid, linear, radial and conic gradients, **mesh gradients**, image fills
-  and **noise / grain**. Stack several fills on one layer.
-- **Effects:** shadows, layer blur, background blur (glass), blend modes, opacity, rotation,
-  image adjustments.
+- **Rich fills:** solid, linear, radial and conic gradients, **mesh gradients** (with presets
+  such as Aurora, Dusk, Lagoon, Ember and Chrome), image fills and **noise / grain**. Stack
+  several fills on one layer.
+- **Effects:** shadows, layer blur, **liquid glass** (one click, light or dark), blend modes,
+  opacity, rotation, image adjustments. Logos also get a polished **metal** version.
 - **Real fonts** from Google Fonts (Inter, Bricolage Grotesque, Bebas Neue, Playfair Display…).
 - **Layers panel:** drag to reorder or move layers into frames, rename, hide and lock.
 - **Pages:** split a document into pages ("Website", "Social", "Ideas"), each with its own
@@ -226,6 +227,7 @@ adds its piece to a single global object, `window.Folio`.
 | `src/shortcuts.js` | All keyboard shortcuts and the shortcuts help window. |
 | `src/demo.js` | Builds the starter document. A good example of how designs are described. |
 | `src/brand.js` | Brand kits: the library, the active brand, and the CSS variables (`--color-primary`, …) that link layers to it. |
+| `src/effects.js` | Named presets (mesh gradients, liquid glass) shared by the panel and Claude. |
 | `src/brand-panel.js` | The Brand tab next to Layers: colours, fonts, logos, voice and style rules. |
 | `src/ai-prompt.js` | Claude's design guide and the list of tools it can use on the canvas. |
 | `src/ai-tools.js` | What those tools do: create, edit, move, delete layers, screenshots, brand kits. |
