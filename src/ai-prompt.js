@@ -226,7 +226,7 @@ Write colours as hex: #rrggbb, or #rrggbbaa for transparency (#ffffff26 is white
 
 These load automatically from Google Fonts (weights in brackets):
 ${fontLines}
-Prefer these. Other Google Fonts family names usually work too, but they are not guaranteed.
+Prefer these; other Google Fonts usually work but are not guaranteed.
 
 ## Images
 
@@ -312,8 +312,6 @@ A component's main is an ordinary layer tree, usually on an artboard called "Com
 Pages group artboards by kind of work ("Website", "Social", "Ideas"); the user views one page at a time.
 - Keep work on the page the user is viewing unless they ask otherwise. New artboards (create_nodes with parent_id null) land there; page_id puts them on another page.
 - Create a page with manage_pages only for a new kind of work, named after it. Follow the structure the user already has, and ask when unsure.
-- The starter kit goes on a "Components" page and logo drafts on a "Logos" page by themselves.
-- Editing or screenshotting a layer on another page switches the view there; switch back before making artboards meant for the user's page.
 - Delete a page that has artboards only when the user says so.
 
 # Brand kits
@@ -362,11 +360,15 @@ Red flags: clip-art literalism (a coffee bean for a café), a stock font with no
 Example, a wordmark for a pottery studio (the i's dot is a kiln arch):
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 2 146 64"><text x="0" y="64" font-family="Fraunces" font-weight="600" font-size="72" letter-spacing="-1" fill="#111111">Kıln</text><path d="M59 22v-7a8 8 0 0 1 16 0v7z" fill="#111111"/></svg>
 
+# Importing pages
+
+When the user gives code or a URL to recreate, or wants their site or components in Folio, import first instead of rebuilding: import_url for a URL, import_html for code (from their project: static HTML plus the CSS it uses; selector picks one section). Then screenshot and clean up: rename layers, link brand tokens, make repeated parts components. Script-built pages can arrive nearly empty; say so and offer to rebuild from a screenshot or a description. Recreating someone else's site is for reference and learning; never present its branding as the user's own.
+
 # Workflow
 
 1. Look first. The user's message starts with a short description of the document and selection; call get_document for the full outline (pages and the active brand kit) and get_tree before editing something you haven't seen. Call list_components when the document has components.
 2. Plan briefly in your head: the one-line design read and the idea (see Start from an idea), format and size, 2–3 colours plus an accent and one or two fonts (the brand kit's tokens when one is active), the sections, and which repeated parts become components. Don't write a long plan for the user.
-3. Build in sections. Create the artboard first (create_nodes with parent_id null), then one create_nodes or create_instances call per major section (nav, hero, features, pricing, footer…) with the artboard's id as parent_id. Small designs such as a social post can be created in one call.
+3. Build in sections. Create the artboard first (create_nodes with parent_id null), then one create_nodes or create_instances call per major section with the artboard's id as parent_id. Small designs such as a social post can be created in one call.
 4. Check your work. Screenshot the artboard (and single sections for detail; get_tree shows real rendered sizes) and review it against this list:
    1. In one second I see one thing; in five, a stranger knows what this is and what to do.
    2. Squinting leaves 2–3 masses; with the logo covered, it could not belong to a competitor.
@@ -723,6 +725,40 @@ ${JSON.stringify(EXAMPLE)}`;
           confirm: { type: 'boolean', description: 'delete: true once the user agreed to delete a page that has artboards.' },
         },
         required: ['action'],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'import_html',
+      description:
+        'Turn HTML and its CSS into editable Folio layers with auto layout (scripts never run). Without parent_id it becomes a new artboard, width px wide with hug height, on the page the user is viewing (or page_id); with parent_id it is added inside that frame. Returns the new id, the layer count, warnings about what was approximated or skipped, and an outline (depth 3) to refine with update_nodes.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          html: { type: 'string', description: 'A full HTML document or a fragment, with its CSS in <style> or style attributes (up to 3 MB).' },
+          width: { type: 'integer', minimum: 320, maximum: 2560, description: 'Viewport width the page is laid out at. Default 1440 (laptop 1280, tablet 768, mobile 390), or the frame\'s width with parent_id.' },
+          name: { type: 'string', description: 'Artboard name. Default: the page <title>.' },
+          base_url: { type: 'string', description: 'http(s) address that relative links, images and stylesheets resolve against.' },
+          page_id: { type: 'string', description: 'Only without parent_id: the page (id or name) for the new artboard. Default: the page the user is viewing.' },
+          parent_id: { type: 'string', description: 'Optional: a frame to import into instead of making an artboard.' },
+          selector: { type: 'string', description: 'Optional CSS selector: import only the first matching element, e.g. "#pricing".' },
+        },
+        required: ['html'],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'import_url',
+      description:
+        'Fetch a public web page (http or https) and import it like import_html, with relative links resolved against the final address. Works over Claude Code only. Local and private network addresses are refused, and scripts never run, so pages built by JavaScript may arrive nearly empty. Returns the same as import_html.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          url: { type: 'string', description: 'The page address, e.g. "https://example.com/pricing".' },
+          width: { type: 'integer', minimum: 320, maximum: 2560, description: 'Viewport width. Default 1440.' },
+          selector: { type: 'string', description: 'Optional CSS selector: import only the first matching element.' },
+        },
+        required: ['url'],
         additionalProperties: false,
       },
     },

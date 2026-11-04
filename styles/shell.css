@@ -259,3 +259,15 @@ body.is-resizing-code * { cursor: ns-resize !important; }
   border-bottom-width: 2px; border-radius: 5px; padding: 1px 6px; min-width: 22px; text-align: center; white-space: nowrap;
 }
 @media (max-width: 760px) { .sc-grid { grid-template-columns: 1fr 1fr; } }
+
+/* =========================== Import HTML modal =========================== */
+.im-modal { width: min(640px, 100%); }
+.im-body { display: flex; flex-direction: column; gap: 8px; }
+.im-body > .f-hint { margin: 0 0 4px; }
+.im-code { min-height: 220px; font: 12px/1.45 var(--mono); white-space: pre; }
+.im-row { display: flex; gap: 8px; }
+.im-row .f-btn { display: inline-flex; align-items: center; gap: 6px; }
+.im-body .f-seg { flex: none; }
+.im-status { min-height: 18px; }
+.im-notes { margin: 6px 0 0; padding-left: 18px; max-height: 140px; overflow: auto; }
+.im-foot { display: flex; justify-content: flex-end; gap: 8px; }

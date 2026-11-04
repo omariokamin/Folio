@@ -49,6 +49,45 @@ window.Folio = window.Folio || {};
     if (ps[i + d]) store.switchPage(ps[i + d].id);
   }
 
+  // ---------- system clipboard (so ⌘V can tell Folio layers from HTML copied elsewhere) ----------
+  // ownClip: the text Folio last put on the system clipboard; false = writing it failed; null = none yet
+  let ownClip = null;
+  function markClipboard(ids) {
+    const text = 'Folio layers: ' + ids.map((id) => store.get(id).name).join(', ');
+    ownClip = false;
+    try {
+      navigator.clipboard.writeText(text).then(() => (ownClip = text), () => (ownClip = false));
+    } catch (e) {
+      ownClip = false;
+    }
+  }
+  document.addEventListener('copy', () => (ownClip = String(window.getSelection ? window.getSelection() : ''))); // text copied from Folio's own UI
+
+  // ⌘V / ⇧⌘V let the browser fire 'paste' (it carries the clipboard); onPaste chooses. If no paste event
+  // follows (some browsers, automation), the fallback runs Folio's paste / reads the clipboard API.
+  let pendingPaste = null;
+  function armPaste(shift) {
+    const token = (pendingPaste = { shift });
+    setTimeout(() => {
+      if (pendingPaste !== token) return;
+      pendingPaste = null;
+      if (shift) Folio.importer && Folio.importer.pasteHtml('');
+      else actions.paste();
+    }, 0);
+  }
+  function onPaste(e) {
+    if (Folio.ui.isTyping() || store.editingTextId || document.querySelector('.f-modal-backdrop')) return;
+    const shift = !!(pendingPaste && pendingPaste.shift);
+    pendingPaste = null;
+    const cd = e.clipboardData;
+    const html = (cd && cd.getData('text/html')) || '';
+    const text = (cd && cd.getData('text/plain')) || '';
+    const fromFolio = (ownClip && text === ownClip) || (ownClip === false && store.clipboard && store.clipboard.length);
+    e.preventDefault();
+    if (Folio.importer && (shift || (html && !fromFolio))) return Folio.importer.pasteHtml(html, { text });
+    actions.paste();
+  }
+
   // ---------- actions (each one commits its own undo step) ----------
   const actions = {
     remove() {
@@ -73,12 +112,14 @@ window.Folio = window.Folio || {};
       const ids = topLevel();
       if (!ids.length) return;
       store.copy(ids);
+      markClipboard(ids);
       Folio.ui.toast(`Copied ${ids.length} layer${ids.length > 1 ? 's' : ''}`);
     },
     cut() {
       const ids = topLevel();
       if (!ids.length || lockedByInstance(ids)) return;
       store.copy(ids);
+      markClipboard(ids);
       store.remove(ids);
       store.commit('Cut');
     },
@@ -313,6 +354,7 @@ window.Folio = window.Folio || {};
         ['mod+c', 'Copy'],
         ['mod+x', 'Cut'],
         ['mod+v', 'Paste'],
+        ['mod+shift+v', 'Paste HTML as layers'],
         ['mod+d', 'Duplicate'],
         ['del', 'Delete'],
         ['up', 'Nudge 1px (Shift: 10px)'],
@@ -458,7 +500,7 @@ window.Folio = window.Folio || {};
         return run(actions.copy);
       }
       if (code === 'KeyX' || lower === 'x') return run(actions.cut);
-      if (code === 'KeyV' || lower === 'v') return run(actions.paste);
+      if (code === 'KeyV' || lower === 'v') return armPaste(e.shiftKey);
       if (code === 'KeyG' || lower === 'g') return run(e.shiftKey ? actions.ungroup : actions.group);
       if (code === 'KeyA' || lower === 'a') return run(actions.selectAll);
       if (code === 'KeyS' || lower === 's') return run(actions.save);
@@ -507,6 +549,7 @@ window.Folio = window.Folio || {};
 
   function init() {
     window.addEventListener('keydown', onKeyDown);
+    document.addEventListener('paste', onPaste);
   }
 
   Folio.shortcuts = { init, showHelp, hideHelp, list, onKeyDown };

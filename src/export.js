@@ -397,6 +397,8 @@ ${html}
       width,
       height,
       cacheBust: false,
+      // a broken or blocked image would otherwise fail the whole export; draw a light grey pixel instead
+      imagePlaceholder: 'data:image/gif;base64,R0lGODlhAQABAIAAAOTk5wAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw==',
       // put the artboard at the origin of the image (right/bottom must be reset too, or the
       // computed "inset" of an artboard far out on the canvas pushes it out of frame)
       // (clipPath: an artboard on another page is clipped away on the canvas while it is exported)

@@ -93,6 +93,9 @@ The full step-by-step guide, including troubleshooting, is in
   updating live as you design.
 - **Export:** PNG at 1x / 2x / 3x, a complete standalone `.html` page, or copy the HTML + CSS.
 - **Undo / redo**, copy / paste, duplicate, autosave, and save/open `.folio.json` files.
+- **Import HTML:** **File → Import HTML…** turns pasted code or an `.html` file into editable layers
+  with auto layout, and `⇧⌘V` pastes a selection copied from a website as layers. Scripts in the
+  imported page never run, so pages built by JavaScript may come in nearly empty.
 - **Brand kits:** keep each client's colours, fonts, logos, tone of voice and style in one place.
   Layers link to the brand, so changing a brand colour updates every design at once, and
   switching brands re-skins the whole document. Four starter kits included.
@@ -153,6 +156,7 @@ the full list.
 | Hand (pan) | `H`, or hold `Space` |
 | Undo / Redo | `⌘Z` / `⇧⌘Z` (or `⌘Y`) |
 | Copy / Cut / Paste | `⌘C` / `⌘X` / `⌘V` |
+| Paste HTML (e.g. copied from a website) as layers | `⇧⌘V` |
 | Duplicate | `⌘D` |
 | Delete | `Delete` or `Backspace` |
 | Nudge 1px / 10px | Arrow keys / `Shift` + arrow keys |

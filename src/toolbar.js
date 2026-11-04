@@ -221,6 +221,7 @@ window.Folio = window.Folio || {};
       { label: 'New document', icon: 'file', action: act.newDoc },
       { label: 'Open file…', icon: 'folder', shortcut: k('mod+o'), action: act.open },
       { label: 'Save to file', icon: 'download', shortcut: k('mod+s'), action: act.save },
+      { label: 'Import HTML…', icon: 'code', action: () => Folio.importer && Folio.importer.open() },
       { sep: true },
       { label: 'Load demo', icon: 'sparkle', action: act.loadDemo },
       { sep: true },

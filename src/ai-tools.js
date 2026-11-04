@@ -1776,7 +1776,7 @@ window.Folio = window.Folio || {};
     isCurrent(page) ? `on page ${pageTag(page)}, the one the user is viewing` : `on page ${pageTag(page)}; the view stays on ${q(S().currentPage().name)}, so new artboards still go there`;
 
   // Tools that act on (or screenshot) existing layers: the view follows them to their page.
-  const FOLLOW_TOOLS = new Set(['create_nodes', 'update_nodes', 'delete_nodes', 'move_nodes', 'screenshot', 'create_component', 'create_instances', 'update_instances']);
+  const FOLLOW_TOOLS = new Set(['create_nodes', 'update_nodes', 'delete_nodes', 'move_nodes', 'screenshot', 'create_component', 'create_instances', 'update_instances', 'import_html']);
   function touchedIds(inp) {
     const out = [];
     const add = (v) => typeof v === 'string' && v.trim() && out.push(v);
@@ -3947,6 +3947,89 @@ window.Folio = window.Folio || {};
     return done(`Moved page ${q(page.name)} to position ${to}.`, `Reordered pages`);
   }
 
+  // ---------- HTML import (SPEC "HTML import (v0.7)") ----------
+  const MAX_HTML_BYTES = 3 * 1024 * 1024;
+
+  async function importHtml(input) {
+    const I = Folio.importer;
+    if (!I || typeof I.fromHtml !== 'function') return fail('HTML import is not available in this build of Folio (src/import.js is not loaded). Rebuild the design with create_nodes instead.', 'Import unavailable');
+    const store = S();
+    const html = input.html;
+    if (typeof html !== 'string' || !html.trim()) return fail('import_html needs "html": the page or snippet as one string, with its CSS in <style> or style attributes.', 'Nothing to import');
+    const bytes = new Blob([html]).size;
+    if (bytes > MAX_HTML_BYTES) return fail(`The HTML is ${Math.ceil(bytes / 1024)} KB, over the 3 MB limit. Import one section (selector), or remove inlined images and fonts first.`, 'HTML too large');
+    const width = input.width == null ? 1440 : Number(input.width);
+    if (!isFinite(width) || width < 320 || width > 2560) return fail(`"width" must be a number from 320 to 2560 (desktop 1440, laptop 1280, tablet 768, mobile 390); got ${str(input.width)}.`, 'Bad width');
+    const opts = { width: Math.round(width) };
+    if (typeof input.name === 'string' && input.name.trim()) opts.name = clip(input.name, 80);
+    if (input.base_url != null && input.base_url !== '') {
+      let u = null;
+      try {
+        u = new URL(String(input.base_url));
+      } catch (e) {
+        /* reported below */
+      }
+      if (!u || !/^https?:$/.test(u.protocol)) return fail(`"base_url" must be an http(s) address such as https://example.com/; got ${str(input.base_url)}.`, 'Bad base URL');
+      opts.baseUrl = u.href;
+    }
+    if (input.selector != null && input.selector !== '') {
+      const sel = String(input.selector).trim().slice(0, 300);
+      try {
+        document.createDocumentFragment().querySelector(sel);
+      } catch (e) {
+        return fail(`"selector" ${q(sel)} is not a valid CSS selector.`, 'Bad selector');
+      }
+      opts.selector = sel;
+    }
+    const notes = [];
+    let parent = null;
+    let page = null;
+    if (input.parent_id != null && input.parent_id !== '') {
+      const r = resolve(input.parent_id, notes);
+      if (r.error) return fail(r.error + ' Nothing was imported.', 'Parent not found');
+      parent = r.node;
+      if (parent.type !== 'frame') return fail(`${describeNode(parent.id)} cannot hold children; parent_id must be a frame. Nothing was imported.`, 'Bad parent');
+      if (instanceScope(parent.id)) return fail(`${q(parent.name)} (${parent.id}) is part of an instance, so nothing can be added inside it. Import into the main component, or detach the instance first. Nothing was imported.`, 'Cannot add inside an instance');
+      opts.parentId = parent.id;
+      if (input.width == null) {
+        // lay the snippet out at the frame's content width, like paste-as-layers does
+        const el = Folio.render && Folio.render.el && Folio.render.el(parent.id);
+        const pad = (parent.layout && parent.layout.padding) || [0, 0, 0, 0];
+        opts.width = Math.max(100, Math.round((el ? el.clientWidth : parent.width) - pad[1] - pad[3]));
+      }
+      if (input.page_id != null && input.page_id !== '') notes.push('page_id only applies to new artboards (no parent_id), so it was ignored');
+    } else if (input.page_id != null && input.page_id !== '' && pagesOn()) {
+      const pr = findPage(input.page_id);
+      if (pr.error) return fail(pr.error + ' Nothing was imported.', 'Page not found');
+      page = pr.page;
+      opts.pageId = page.id;
+    }
+    let res;
+    try {
+      res = await I.fromHtml(html, opts);
+    } catch (e) {
+      return fail(`The import failed: ${errText(e)}. Nothing was added.`, 'Import failed');
+    }
+    const root = res && store.get(res.rootId);
+    if (!root) return fail('The import produced no layers (the HTML may be empty, or everything in it is hidden or built by scripts, which never run). Nothing was added.', 'Nothing imported');
+    const ids = [root.id, ...store.descendants(root.id)];
+    afterMutation(ids, [root.id], parent ? null : [root.id]);
+    const rs = renderedSize(root.id) || [Math.round(root.width), Math.round(root.height)];
+    const out = { [parent ? 'layer' : 'artboard']: `${root.id} ${q(root.name)} ${rs[0]}×${rs[1]}`, layers: ids.length };
+    if (parent) out.parent = `${parent.id} ${q(parent.name)}`;
+    if (page && !isCurrent(page)) out.page = 'Imported ' + pageNote(page);
+    const warnings = notes.concat(Array.isArray(res.warnings) ? res.warnings.map(String) : []);
+    if (warnings.length) out.warnings = warnings.slice(0, MAX_WARNINGS);
+    if (isObj(res.skipped) && Object.keys(res.skipped).length) out.skipped = res.skipped;
+    if (ids.length <= 3 && /<script/i.test(html)) out.nearlyEmpty = 'Almost nothing came in: the page is probably built by JavaScript, which import never runs. Tell the user, and offer to rebuild it from a screenshot or a description.';
+    out.next = `Screenshot ${root.id} and compare, then clean up: rename layers, link brand tokens, turn repeated parts into components. get_tree shows more than this outline.`;
+    out.outline = serialize(root.id, { depth: 3, maxNodes: 60 });
+    return result(out, `Imported ${q(root.name)} (${ids.length} layer${ids.length === 1 ? '' : 's'})`, ids);
+  }
+
+  const importUrl = () =>
+    fail('import_url only works when Folio is driven from Claude Code (it needs a helper on the computer to fetch the page). Here, ask the user to paste the page\'s HTML into the chat (then use import_html) or into File → Import HTML…, or to ask again from Claude Code.', 'URL import needs Claude Code');
+
   const HANDLERS = {
     get_document: getDocument,
     get_tree: getTree,
@@ -3965,6 +4048,8 @@ window.Folio = window.Folio || {};
     draft_logo: draftLogo,
     save_logo: saveLogo,
     manage_pages: managePages,
+    import_html: importHtml,
+    import_url: importUrl,
   };
 
   async function execute(name, input) {

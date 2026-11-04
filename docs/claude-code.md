@@ -105,6 +105,52 @@ Keep the conversation going in the Terminal: "make the headline bigger", "try a 
 
 ---
 
+## Import a page
+
+Claude can turn existing web pages into real Folio layers (frames, text and images with auto
+layout) that you can edit like anything else. Then it tidies them up: clear layer names, your brand
+kit's colours and fonts, and components for parts that repeat. Three ways to ask:
+
+**Paste code.** Copy HTML (and its CSS) from anywhere, then in Claude Code type something like
+`Import this into Folio:` and paste it with `⌘V`. Long code is fine, up to 3 MB.
+
+**Recreate a page from the web.**
+
+```
+Recreate https://example.com/pricing in Folio
+```
+
+Claude Code downloads the page on your Mac and Folio rebuilds it as layers. Add `on mobile` (390 px
+wide) or `just the pricing table` if you want less.
+
+**Bring in your own site.** Start `claude` in your project's folder (this needs Folio set up for
+every folder; see **Using Folio from any folder** below) and ask:
+
+```
+Bring my site's pricing section from ./src into Folio
+```
+
+From the Folio folder, give the full path instead (`~/Sites/my-shop/src`).
+
+Claude reads your files, puts the HTML and CSS together and imports just that section.
+
+Good to know:
+
+- **Nothing on the page runs.** Folio imports what the HTML and CSS describe and never runs the
+  page's scripts. Sites that build everything with JavaScript can arrive nearly empty. Claude will
+  tell you and offer to rebuild the page from a screenshot (drag one into Claude Code) or from a
+  description.
+- **Only public pages.** For safety Folio doesn't fetch pages from your own computer or home
+  network (`localhost`, `192.168.…` and the like), and it can't see pages behind a login. For those,
+  open the page in your browser, choose **File → Save Page As…** (or **View Source**) and paste the
+  code instead.
+- **Other people's sites are for reference.** Recreating a site helps you study a layout or start a
+  redesign. Don't publish someone else's branding, text or images as your own.
+- The in-app AI chat (with an API key) can import pasted code, but not web addresses. URLs work
+  through Claude Code only.
+
+---
+
 ## Good to know
 
 **Undo.** Press `⌘Z` in the Folio tab. Each burst of Claude's changes is one undo step, so one `⌘Z`

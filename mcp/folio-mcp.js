@@ -20,6 +20,8 @@
  * Environment:
  *   FOLIO_PORT=4317       preferred port (the next free one is used if it is busy)
  *   FOLIO_NO_BROWSER=1    never open a browser automatically (just print the URL)
+ *   FOLIO_ALLOW_LOCAL_FETCH=1  TESTS ONLY: lets import_url fetch loopback addresses (127.0.0.0/8, ::1);
+ *                         every other private range stays blocked. Never set it for normal use.
  */
 'use strict';
 
@@ -27,6 +29,10 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const http = require('http');
+const https = require('https');
+const dns = require('dns');
+const net = require('net');
+const zlib = require('zlib');
 const vm = require('vm');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
@@ -83,6 +89,7 @@ function loadPrompt() {
       const def = { name: t.name, description: String(t.description || ''), inputSchema: schema };
       if (READ_ONLY_TOOLS.has(t.name)) def.annotations = { readOnlyHint: true };
       else if (t.name === 'delete_nodes') def.annotations = { destructiveHint: true };
+      else if (t.name === 'import_url') def.annotations = { openWorldHint: true };
       tools.push(def);
     }
     prompt = { ok: true, system: ap.system, tools, error: null };
@@ -435,6 +442,204 @@ async function openFolioTool(input) {
 }
 
 // ---------------------------------------------------------------------------
+// import_url: fetch a public page here (Node), then import it in the tab as import_html
+// ---------------------------------------------------------------------------
+const FETCH_TIMEOUT_MS = 15 * 1000;
+const FETCH_MAX_BYTES = 3 * 1024 * 1024; // same limit as import_html
+const MAX_REDIRECTS = 5;
+const USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
+
+// Addresses a page fetch must never reach: this computer, the local network, cloud metadata, etc.
+const BLOCKED = new net.BlockList();
+[
+  ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16],
+  ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15], ['224.0.0.0', 3], // multicast + reserved
+].forEach(([a, n]) => BLOCKED.addSubnet(a, n, 'ipv4'));
+[
+  ['::', 96], ['fc00::', 7], ['fe80::', 10], ['ff00::', 8],
+].forEach(([a, n]) => BLOCKED.addSubnet(a, n, 'ipv6'));
+const LOOPBACK = new net.BlockList();
+LOOPBACK.addSubnet('127.0.0.0', 8, 'ipv4');
+LOOPBACK.addAddress('::1', 'ipv6');
+
+const allowLoopback = () => /^(1|true|yes)$/i.test(process.env.FOLIO_ALLOW_LOCAL_FETCH || ''); // tests only
+
+/** Why this IP must not be fetched, or '' when it is a public address. */
+function blockedReason(ip) {
+  if (!net.isIP(ip)) return `${ip} is not an IP address`;
+  // IPv4-mapped IPv6 (::ffff:10.0.0.1, ::ffff:a00:1) is judged by the IPv4 address it carries
+  const m = /^::ffff:(?:(\d+\.\d+\.\d+\.\d+)|([0-9a-f]{1,4}):([0-9a-f]{1,4}))$/i.exec(ip);
+  if (m) ip = m[1] || [parseInt(m[2], 16) >> 8, parseInt(m[2], 16) & 255, parseInt(m[3], 16) >> 8, parseInt(m[3], 16) & 255].join('.');
+  const type = net.isIP(ip) === 6 ? 'ipv6' : 'ipv4';
+  if (allowLoopback() && LOOPBACK.check(ip, type)) return '';
+  return BLOCKED.check(ip, type) ? `${ip} is a local or private network address` : '';
+}
+
+const fetchError = (msg) => Object.assign(new Error(msg), { fetch: true });
+
+function parseHttpUrl(raw) {
+  let u;
+  try {
+    u = new URL(String(raw || '').trim());
+  } catch (e) {
+    throw fetchError(`${JSON.stringify(String(raw || '').slice(0, 200))} is not a valid web address (use https://…)`);
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') throw fetchError(`only http:// and https:// addresses can be imported, not ${u.protocol}`);
+  u.username = u.password = ''; // never send credentials typed into a URL
+  return u;
+}
+
+/** Resolve the host once, refuse it if ANY address is private, and return the address to connect to. */
+async function checkedAddress(u) {
+  const host = u.hostname.replace(/^\[|\]$/g, '');
+  let addrs;
+  try {
+    addrs = net.isIP(host) ? [{ address: host, family: net.isIP(host) }] : await dns.promises.lookup(host, { all: true, verbatim: true });
+  } catch (e) {
+    throw fetchError(`could not find the server ${host} (${e.code || e.message})`);
+  }
+  if (!addrs.length) throw fetchError(`could not find the server ${host}`);
+  for (const a of addrs) {
+    const why = blockedReason(a.address);
+    if (why) throw fetchError(`refused ${u.host}: ${why}. Folio only imports public web pages`);
+  }
+  return addrs[0];
+}
+
+function requestOnce(u, addr, signal) {
+  return new Promise((resolve, reject) => {
+    const mod = u.protocol === 'https:' ? https : http;
+    // Connect to the address we checked (never a second DNS answer: no rebinding). TLS still verifies u.hostname.
+    const lookup = (h, opts, cb) => (opts && opts.all ? cb(null, [addr]) : cb(null, addr.address, addr.family));
+    const req = mod.request(
+      {
+        protocol: u.protocol,
+        hostname: u.hostname.replace(/^\[|\]$/g, ''),
+        port: u.port || undefined,
+        path: u.pathname + u.search,
+        method: 'GET',
+        lookup,
+        signal,
+        agent: false,
+        headers: {
+          'User-Agent': USER_AGENT,
+          Accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.5',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'gzip, deflate, br',
+        },
+      },
+      resolve
+    );
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+/** Read at most `max` bytes of the (decompressed) body. */
+function readCapped(res, max) {
+  return new Promise((resolve, reject) => {
+    const enc = String(res.headers['content-encoding'] || '').trim().toLowerCase();
+    let body = res;
+    if (enc === 'br') body = res.pipe(zlib.createBrotliDecompress());
+    else if (enc === 'gzip' || enc === 'x-gzip' || enc === 'deflate') body = res.pipe(zlib.createUnzip());
+    else if (enc && enc !== 'identity') return reject(fetchError(`the server sent the page in an unsupported encoding (${enc})`));
+    const chunks = [];
+    let size = 0;
+    let done = false;
+    const finish = (truncated) => {
+      if (done) return;
+      done = true;
+      res.destroy();
+      if (body !== res) body.destroy();
+      resolve({ buf: Buffer.concat(chunks).subarray(0, max), truncated });
+    };
+    body.on('data', (c) => {
+      chunks.push(c);
+      size += c.length;
+      if (size > max) finish(true);
+    });
+    body.on('end', () => finish(false));
+    body.on('error', (e) => !done && ((done = true), reject(e)));
+    res.on('error', (e) => !done && ((done = true), reject(e)));
+    res.on('aborted', () => !done && ((done = true), reject(fetchError('the connection was cut off'))));
+  });
+}
+
+/** Charset from the Content-Type header, a BOM or a <meta> in the first bytes; utf-8 otherwise. */
+function decodeHtml(buf, contentType) {
+  let label = (/charset\s*=\s*["']?\s*([\w.:-]+)/i.exec(contentType || '') || [])[1];
+  if (buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) label = 'utf-8';
+  else if (buf[0] === 0xff && buf[1] === 0xfe) label = 'utf-16le';
+  else if (buf[0] === 0xfe && buf[1] === 0xff) label = 'utf-16be';
+  if (!label) label = (/<meta[^>]+charset\s*=\s*["']?\s*([\w.:-]+)/i.exec(buf.subarray(0, 4096).toString('latin1')) || [])[1];
+  try {
+    return new TextDecoder(label || 'utf-8').decode(buf);
+  } catch (e) {
+    return new TextDecoder('utf-8').decode(buf); // unknown label
+  }
+}
+
+/** Fetch a public HTML page → { url (final), html, bytes, truncated }. Throws Error with a plain-English message. */
+async function fetchPage(rawUrl) {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS);
+  const aborted = new Promise((_, reject) => ac.signal.addEventListener('abort', () => reject(fetchError('timed out')), { once: true }));
+  aborted.catch(() => {});
+  const abortable = (p) => Promise.race([p, aborted]);
+  try {
+    let u = parseHttpUrl(rawUrl);
+    for (let hop = 0; ; hop++) {
+      const addr = await abortable(checkedAddress(u));
+      const res = await abortable(requestOnce(u, addr, ac.signal));
+      const status = res.statusCode;
+      if ([301, 302, 303, 307, 308].includes(status) && res.headers.location) {
+        res.destroy();
+        if (hop >= MAX_REDIRECTS) throw fetchError(`the page redirected more than ${MAX_REDIRECTS} times`);
+        u = parseHttpUrl(new URL(res.headers.location, u).href);
+        continue;
+      }
+      if (status < 200 || status >= 300) {
+        res.destroy();
+        throw fetchError(`the server answered HTTP ${status}${res.statusMessage ? ' ' + res.statusMessage : ''}`);
+      }
+      const type = String(res.headers['content-type'] || '');
+      if (!/^\s*(text\/html|application\/xhtml\+xml)\s*(;|$)/i.test(type)) {
+        res.destroy();
+        throw fetchError(`the address is not a web page (Content-Type ${type ? JSON.stringify(type.slice(0, 80)) : 'missing'}); only text/html can be imported`);
+      }
+      const { buf, truncated } = await abortable(readCapped(res, FETCH_MAX_BYTES));
+      return { url: u.href, html: decodeHtml(buf, type), bytes: buf.length, truncated };
+    }
+  } catch (e) {
+    if (ac.signal.aborted) throw fetchError(`the page did not finish loading within ${FETCH_TIMEOUT_MS / 1000} seconds`);
+    throw e.fetch ? e : fetchError(`the connection failed (${e.code || e.message || e})`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function importUrlTool(args, rpcId) {
+  let page;
+  try {
+    page = await fetchPage(args.url);
+  } catch (e) {
+    return errorResult(
+      `Could not import ${JSON.stringify(String(args.url || '').slice(0, 300))}: ${e.message}. Nothing was added. ` +
+        'If the page needs a login or is on the user\'s own computer, ask them to save it (or paste its HTML) and use import_html.'
+    );
+  }
+  const input = { html: page.html, base_url: page.url };
+  if (args.width !== undefined) input.width = args.width;
+  if (args.selector !== undefined) input.selector = args.selector;
+  const r = await enqueue('import_html', input, rpcId);
+  let note = `Fetched ${page.url} (${Math.ceil(page.bytes / 1024)} KB).`;
+  if (page.truncated) note += ' The page was larger than 3 MB, so only its first 3 MB were imported.';
+  r.content.unshift({ type: 'text', text: note });
+  return r;
+}
+
+// ---------------------------------------------------------------------------
 // HTTP server: the Folio app + bridge endpoints
 // ---------------------------------------------------------------------------
 const MIME = {
@@ -673,10 +878,6 @@ function write(msg) {
     stdoutBroken = true;
   }
 }
-process.stdout.on('error', () => {
-  stdoutBroken = true;
-  shutdown();
-});
 
 const rpcError = (id, code, message, data) => ({
   jsonrpc: '2.0',
@@ -742,6 +943,7 @@ async function handleMessage(msg) {
         );
       }
       if (!prompt.tools.some((t) => t.name === name)) return rpcError(id, -32602, `Unknown tool: ${name}`);
+      if (name === 'import_url') return rpcResult(id, await importUrlTool(args, id)); // fetched here, imported in the tab
       return rpcResult(id, await enqueue(name, args, id));
     }
     default:
@@ -773,23 +975,6 @@ async function handleLine(line) {
   }
 }
 
-let buffer = '';
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', (chunk) => {
-  buffer += chunk;
-  let i;
-  while ((i = buffer.indexOf('\n')) >= 0) {
-    const line = buffer.slice(0, i);
-    buffer = buffer.slice(i + 1);
-    handleLine(line);
-  }
-});
-process.stdin.on('end', () => {
-  if (buffer.trim()) handleLine(buffer);
-  buffer = '';
-  shutdown();
-});
-
 let shuttingDown = false;
 function shutdown() {
   if (shuttingDown) return;
@@ -806,10 +991,36 @@ function shutdown() {
   }
   setTimeout(() => process.exit(0), 50);
 }
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
-process.on('uncaughtException', (e) => log('unexpected error:', (e && e.stack) || String(e)));
-process.on('unhandledRejection', (e) => log('unexpected error:', (e && e.stack) || String(e)));
 
-loadPrompt();
-const httpReady = startHttp();
+let httpReady = Promise.resolve();
+function main() {
+  process.stdout.on('error', () => {
+    stdoutBroken = true;
+    shutdown();
+  });
+  let buffer = '';
+  process.stdin.setEncoding('utf8');
+  process.stdin.on('data', (chunk) => {
+    buffer += chunk;
+    let i;
+    while ((i = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, i);
+      buffer = buffer.slice(i + 1);
+      handleLine(line);
+    }
+  });
+  process.stdin.on('end', () => {
+    if (buffer.trim()) handleLine(buffer);
+    buffer = '';
+    shutdown();
+  });
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+  process.on('uncaughtException', (e) => log('unexpected error:', (e && e.stack) || String(e)));
+  process.on('unhandledRejection', (e) => log('unexpected error:', (e && e.stack) || String(e)));
+  loadPrompt();
+  httpReady = startHttp();
+}
+
+if (require.main === module) main();
+else module.exports = { fetchPage, blockedReason }; // for tests (.dev/)
