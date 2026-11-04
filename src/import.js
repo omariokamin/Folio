@@ -24,7 +24,18 @@ window.Folio = window.Folio || {};
   const EMBED = 'iframe,frame,object,embed,video,canvas';
   const BAD_URL = /^(javascript|vbscript|data:text\/html|data:application)/i;
 
+  /** Re-parse until stable: serialising and re-parsing can turn inert markup live (mutation XSS). */
   function sanitize(html, baseUrl) {
+    let out = clean(html, baseUrl);
+    for (let i = 0; i < 4; i++) {
+      const again = clean(out.markup, baseUrl);
+      if (again.markup === out.markup) return out;
+      out = { ...again, title: out.title };
+    }
+    throw new Error('That HTML could not be made safe to import.');
+  }
+
+  function clean(html, baseUrl) {
     const doc = new DOMParser().parseFromString(html, 'text/html');
     doc.querySelectorAll(DROP).forEach((el) => el.remove());
     // embeds become same-size placeholders so the layout around them holds
@@ -44,16 +55,17 @@ window.Folio = window.Folio || {};
     doc.querySelectorAll('*').forEach((el) => {
       [...el.attributes].forEach((a) => {
         const n = a.name.toLowerCase();
-        const v = a.value.replace(/[\u0000- \u007f]+/g, '');
+        const v = a.value.replace(/[\u0000-\u0020\u007f]+/g, '');
         if (n.startsWith('on') || ['srcdoc', 'action', 'formaction', 'ping', 'autofocus', 'loading', 'http-equiv', 'autoplay', 'manifest'].includes(n) || BAD_URL.test(v))
           el.removeAttribute(a.name);
       });
     });
     const head = doc.head || doc.documentElement.insertBefore(doc.createElement('head'), doc.body);
     // CSS animations jump to their end state, so "fade in" elements are measured visible
-    const st = doc.createElement('style');
+    const st = doc.querySelector('style[data-folio]') || doc.createElement('style');
+    st.setAttribute('data-folio', '');
     st.textContent = '*,*::before,*::after{animation-duration:0s!important;animation-delay:0s!important;animation-iteration-count:1!important;transition:none!important;scroll-behavior:auto!important}';
-    head.appendChild(st);
+    if (!st.isConnected) head.appendChild(st);
     if (baseUrl && /^https?:\/\//i.test(baseUrl)) {
       const b = doc.createElement('base');
       b.setAttribute('href', baseUrl);
@@ -96,6 +108,7 @@ window.Folio = window.Folio || {};
   const num = (v) => parseFloat(v) || 0;
   const r1 = (v) => Math.round(v * 10) / 10;
   const r2 = (v) => Math.round(v * 100) / 100;
+  const up = (v) => Math.ceil(v * 10 - 0.01) / 10; // widths round up: a box 0.05px too narrow wraps its text
 
   /** Split on a separator that is not inside parentheses. */
   function splitTop(s, sep = ',') {
@@ -284,7 +297,7 @@ window.Folio = window.Folio || {};
   // 4. Conversion: DOM → Folio tree
   // =====================================================================
   const REPLACED = new Set(['img', 'svg', 'picture', 'input', 'textarea', 'select', 'button', 'video', 'canvas', 'iframe', 'object', 'embed', 'math', 'hr', 'progress', 'meter']);
-  const GENERIC_FONTS = { 'sans-serif': 'system-ui', 'system-ui': 'system-ui', '-apple-system': 'system-ui', blinkmacsystemfont: 'system-ui', 'ui-sans-serif': 'system-ui', 'segoe ui': 'system-ui', serif: 'Georgia', 'ui-serif': 'Georgia', monospace: 'Courier New', 'ui-monospace': 'Courier New', cursive: 'Caveat' };
+  const GENERIC_FONTS = { 'sans-serif': 'Arial', 'system-ui': 'system-ui', '-apple-system': 'system-ui', blinkmacsystemfont: 'system-ui', 'ui-sans-serif': 'system-ui', 'segoe ui': 'system-ui', serif: 'Georgia', 'ui-serif': 'Georgia', monospace: 'Courier New', 'ui-monospace': 'Courier New', cursive: 'Caveat' };
   const TAG_NAMES = { header: 'Header', nav: 'Nav', footer: 'Footer', main: 'Main', section: 'Section', article: 'Article', aside: 'Aside', ul: 'List', ol: 'List', li: 'Item', a: 'Link', button: 'Button', form: 'Form', figure: 'Figure', figcaption: 'Caption', blockquote: 'Quote', table: 'Table', tr: 'Row', td: 'Cell', th: 'Cell', label: 'Label', h1: 'Heading', h2: 'Heading', h3: 'Heading', h4: 'Heading', h5: 'Heading', h6: 'Heading', p: 'Paragraph', img: 'Image', svg: 'Icon', input: 'Input', textarea: 'Text area', select: 'Select', hr: 'Divider', body: 'Page' };
   // utility / hashed class names make poor layer names
   const UTILITY = /^-?(p|m|px|py|pt|pb|pl|pr|mx|my|mt|mb|ml|mr|w|h|min-w|max-w|min-h|max-h|size|gap|space|text|font|bg|border|rounded|shadow|flex|grid|col-span|row-span|grid-cols|items|justify|self|place|order|z|top|left|right|bottom|inset|leading|tracking|opacity|overflow|ring|transition|duration|ease|basis|grow|shrink|object|aspect|cursor|select|whitespace|fill|stroke|divide|backdrop|blur|translate|rotate|scale|origin|from|via|to|decoration|line-clamp|columns|js|is|has)-|^(flex|grid|block|inline|inline-block|inline-flex|hidden|relative|absolute|fixed|sticky|truncate|uppercase|lowercase|capitalize|italic|underline|antialiased|rounded|shadow|border|ring|transition|grow|shrink|mx-auto|sr-only|clearfix)$|[:[\]/.]|^(css|sc|jsx|svelte|emotion|chakra|mui|tw)-|^_|^[A-Za-z]{2,4}[0-9][A-Za-z0-9]{3,}$/;
@@ -294,17 +307,37 @@ window.Folio = window.Folio || {};
     const aria = el.getAttribute && el.getAttribute('aria-label');
     if (aria && tidy(aria)) return tidy(aria);
     if (el.id && !UTILITY.test(el.id)) return tidy(el.id);
-    const cls = [...(el.classList || [])].find((c) => !UTILITY.test(c));
-    if (cls) return tidy(cls.replace(/-\d+$/, '')); // Folio's exporter numbers duplicate names ("card-2")
+    let cls = [...(el.classList || [])].find((c) => !UTILITY.test(c));
+    if (cls) {
+      cls = cls.replace(/-\d+$/, ''); // Folio's exporter numbers duplicate names ("card-2")
+      const slug = (t) => String(t).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      const content = tidy(fallbackText);
+      if (content && (/^l-/.test(cls) || slug(content).startsWith(cls))) return content.slice(0, 30).trim();
+      const pretty = cls.replace(/[-_]+/g, ' ').trim();
+      return tidy(pretty.charAt(0).toUpperCase() + pretty.slice(1));
+    }
     if (el.localName === 'img' && el.getAttribute('alt')) return tidy(el.getAttribute('alt'));
-    if (fallbackText && tidy(fallbackText)) return tidy(fallbackText).slice(0, 30);
+    if (fallbackText && tidy(fallbackText)) return tidy(fallbackText).slice(0, 30).trim();
     return TAG_NAMES[el.localName] || (el.localName === 'div' || el.localName === 'span' ? 'Frame' : el.localName.charAt(0).toUpperCase() + el.localName.slice(1));
   }
   const genericName = (n) => /^(Frame|Group|Item|Text)$/.test(n);
 
+  /** True when a family renders: a web font the page loaded, a Folio (Google) font, or installed locally. */
+  const fontCache = new Map();
+  function fontAvailable(f, doc) {
+    if (GENERIC_FONTS[f.toLowerCase()] || (Folio.fonts && Folio.fonts.list.some((x) => x.family.toLowerCase() === f.toLowerCase()))) return true;
+    if (doc.fonts && [...doc.fonts].some((ff) => ff.status === 'loaded' && ff.family.replace(/^['"]|['"]$/g, '').toLowerCase() === f.toLowerCase())) return true;
+    if (!fontCache.has(f)) {
+      ctx2d = ctx2d || document.createElement('canvas').getContext('2d');
+      const w = (font) => ((ctx2d.font = font), ctx2d.measureText('mmmmmmmmmmlli1WQ@').width);
+      fontCache.set(f, ['monospace', 'serif'].some((g) => w(`32px "${f}", ${g}`) !== w('32px ' + g)));
+    }
+    return fontCache.get(f);
+  }
+
   function fontOf(cs, ctx) {
     const fams = splitTop(cs.fontFamily).map((f) => f.replace(/^['"]|['"]$/g, '').trim());
-    const f = fams[0] || 'system-ui';
+    const f = fams.find((x) => fontAvailable(x, ctx.doc)) || fams[0] || 'system-ui';
     const fam = GENERIC_FONTS[f.toLowerCase()] || f;
     ctx.fonts.add(fam);
     return fam;
@@ -433,7 +466,7 @@ window.Folio = window.Folio || {};
       const node = {
         type: 'text',
         name: name || t.content.slice(0, 30) || 'Text',
-        width: r1(W(r)),
+        width: up(W(r)),
         height: r1(H(r)),
         sizing: { w: 'fixed', h: 'fixed' },
         text: t,
@@ -512,7 +545,14 @@ window.Folio = window.Folio || {};
       const out = [];
       let run = null;
       const flush = () => {
-        if (run && run.some((n) => (n.nodeType === 3 ? n.data.trim() : (n.textContent || '').trim()))) out.push({ run });
+        const solid = run ? run.filter((n) => (n.nodeType === 3 ? n.data.trim() : (n.textContent || '').trim())) : [];
+        // a row of spaced inline elements (nav links with margins/padding) stays separate layers
+        const boxy = (n) => {
+          const c = css(n);
+          return num(c.marginLeft) || num(c.marginRight) || num(c.paddingLeft) || num(c.paddingRight) || color(c.backgroundColor) || num(c.borderLeftWidth);
+        };
+        if (solid.length > 1 && solid.every((n) => n.nodeType === 1 && n.localName !== 'br') && solid.some(boxy)) solid.forEach((n) => out.push({ el: n, cs: css(n) }));
+        else if (solid.length) out.push({ run });
         run = null;
       };
       const visit = (parent) => {
@@ -593,7 +633,7 @@ window.Folio = window.Folio || {};
       const { style } = boxStyle(el, cs, r);
       const fit = { cover: 'cover', contain: 'contain', fill: 'fill', none: 'contain', 'scale-down': 'contain' }[css(img).objectFit] || 'fill';
       ctx.count++;
-      return { node: { type: 'image', name: nameFor(img), width: r1(W(r)), height: r1(H(r)), sizing: { w: 'fixed', h: 'fixed' }, image: { src, fit }, style } , r };
+      return { node: { type: 'image', name: nameFor(img), width: up(W(r)), height: r1(H(r)), sizing: { w: 'fixed', h: 'fixed' }, image: { src, fit }, style } , r };
     }
 
     function svgLayer(el, cs, r) {
@@ -632,7 +672,7 @@ window.Folio = window.Folio || {};
       }
       const { style } = boxStyle(el, cs, r);
       ctx.count++;
-      return { node: { type: 'image', name: nameFor(el), width: r1(W(r)), height: r1(H(r)), sizing: { w: 'fixed', h: 'fixed' }, image: { src: Folio.svg.toDataUrl(svg), fit: 'contain' }, style }, r };
+      return { node: { type: 'image', name: nameFor(el), width: up(W(r)), height: r1(H(r)), sizing: { w: 'fixed', h: 'fixed' }, image: { src: Folio.svg.toDataUrl(svg), fit: 'contain' }, style }, r };
     }
 
     function embedLayer(el, cs, r) {
@@ -649,7 +689,7 @@ window.Folio = window.Folio || {};
       ctx.skip(kind === 'video' ? 'video (placeholder)' : kind === 'canvas' ? 'canvas (placeholder)' : 'embedded frame (placeholder)');
       ctx.count++;
       const name = { video: 'Video', canvas: 'Canvas' }[kind] || 'Embed';
-      return { node: { type: 'frame', name, width: r1(W(r)), height: r1(H(r)), sizing: { w: 'fixed', h: 'fixed' }, layout: { mode: 'flex', direction: 'column', padding: [0, 0, 0, 0] }, style }, r };
+      return { node: { type: 'frame', name, width: up(W(r)), height: r1(H(r)), sizing: { w: 'fixed', h: 'fixed' }, layout: { mode: 'flex', direction: 'column', padding: [0, 0, 0, 0] }, style }, r };
     }
 
     function fieldLayer(el, cs, r) {
@@ -668,7 +708,7 @@ window.Folio = window.Folio || {};
       const { style, fb } = boxStyle(el, cs, r);
       const pad = sides(cs, 'padding').map((p, i) => r1(p + sides(cs, 'border')[i] - fb));
       ctx.count++;
-      const node = { type: 'frame', name: nameFor(el), width: r1(W(r)), height: r1(H(r)), sizing: { w: 'fixed', h: 'fixed' }, layout: { mode: 'flex', direction: 'row', gap: 0, justify: 'flex-start', align: 'center', padding: pad }, style, children: [] };
+      const node = { type: 'frame', name: nameFor(el), width: up(W(r)), height: r1(H(r)), sizing: { w: 'fixed', h: 'fixed' }, layout: { mode: 'flex', direction: 'row', gap: 0, justify: 'flex-start', align: 'center', padding: pad }, style, children: [] };
       if (label.trim()) {
         const t = textProps(tcs, label.replace(/\s+/g, ' ').trim());
         node.children.push({ type: 'text', name: label.trim().slice(0, 30), sizing: { w: 'fill', h: 'hug' }, width: 100, height: 20, text: t });
@@ -701,7 +741,7 @@ window.Folio = window.Folio || {};
       const node = {
         type: 'frame',
         name: opts.name || nameFor(el),
-        width: r1(W(r)),
+        width: up(W(r)),
         height: r1(H(r)),
         sizing: { w: 'fixed', h: 'fixed' },
         style,
@@ -764,7 +804,7 @@ window.Folio = window.Folio || {};
         let inner = [];
         if (L.ok && flow.length) {
           ctx.count++;
-          inner = [{ type: 'frame', name: 'Content', x: 0, y: 0, width: r1(W(box)), height: r1(H(box)), sizing: { w: 'fill', h: 'fill' }, style: { fills: [] }, layout: { ...L.layout, padding }, children: L.children }];
+          inner = [{ type: 'frame', name: 'Content', x: 0, y: 0, width: up(W(box)), height: r1(H(box)), sizing: { w: 'fill', h: 'fill' }, style: { fills: [] }, layout: { ...L.layout, padding }, children: L.children }];
         }
         if (!L.ok) ctx.warn('Overlapping layers were placed freely (no auto layout) where they overlap.');
         node.layout = { mode: 'none', direction: 'column', padding: [0, 0, 0, 0] };
@@ -920,6 +960,8 @@ window.Folio = window.Folio || {};
 
       // ---- children: sizing (+ a wrapper for the odd one out) ----
       const ax = row ? ['w', 'h'] : ['h', 'w'];
+      // in a row, a full-height child with its own size (no hug) is stretched only when a sibling sets the height
+      const definer = real.some((k, i) => cls[i] === 'full' && (row ? k.hugH : k.hugW));
       res.children = items.map((k, i) => {
         if (k.spacer) return k.node;
         const c = wrap ? 'flex-start' : classify(k);
@@ -927,11 +969,13 @@ window.Folio = window.Folio || {};
         const hugC = row ? k.hugH : k.hugW;
         const sz = {};
         sz[ax[0]] = hint.flex && k.grow > 0 && !wrap ? 'fill' : hugM ? 'hug' : 'fixed';
-        sz[ax[1]] = c === 'full' ? (hugC && !k.anon ? 'hug' : 'fill') : hugC ? 'hug' : 'fixed';
+        sz[ax[1]] = c === 'full' ? (hugC && !k.anon ? 'hug' : row && !definer ? 'fixed' : 'fill') : hugC ? 'hug' : 'fixed';
         if (k.text && sz.w === 'hug' && k.wraps) sz.w = 'fixed';
         k.node.sizing = sz;
+        if (wrap) k.node.width = Math.floor(W(k.r) * 10) / 10; // rounding up could push the last item to the next line
         // this box can hug its cross axis when a child with its own (non-fill) size spans it
-        if (sz[ax[1]] !== 'fill' && k.r[c0] - cb[c0] + cb[c1] - k.r[c1] <= TOL) res.hugCross = true;
+        if ((sz[ax[1]] !== 'fill' || (k.anon && !k.wraps)) && k.r[c0] - cb[c0] + cb[c1] - k.r[c1] <= TOL) res.hugCross = true;
+        if (sz[ax[0]] === 'fill') res.hugMain = false; // a child that grows needs a box that doesn't hug
         if ((k.wraps && sz.w === 'fill') || (k.fluid && sz.w !== 'fixed')) res.fluid = true;
         if (c === 'full' || c === align) return k.node;
         // misaligned: a transparent wrapper that fills the cross axis and aligns this one child
@@ -945,9 +989,9 @@ window.Folio = window.Folio || {};
         const wsz = {};
         wsz[ax[0]] = 'hug';
         wsz[ax[1]] = 'fill';
-        return { type: 'frame', name: k.node.name, width: r1(row ? W(k.r) : W(cb)), height: r1(row ? H(cb) : H(k.r)), sizing: wsz, style: { fills: [] }, layout: { mode: 'flex', direction: dir, wrap: false, gap: 0, justify: 'flex-start', align: a, padding: pad }, children: [k.node] };
+        return { type: 'frame', name: k.node.name, width: up(row ? W(k.r) : W(cb)), height: r1(row ? H(cb) : H(k.r)), sizing: wsz, style: { fills: [] }, layout: { mode: 'flex', direction: dir, wrap: false, gap: 0, justify: 'flex-start', align: a, padding: pad }, children: [k.node] };
       });
-      res.layout = { mode: 'flex', direction: dir, wrap, gap: r1(Math.max(0, gap)), justify, align };
+      res.layout = { mode: 'flex', direction: dir, wrap: wrap || (!!hint.wrap && row), gap: r1(Math.max(0, gap)), justify, align };
       return res;
     }
 
@@ -974,7 +1018,7 @@ window.Folio = window.Folio || {};
         const u = union(g.map((k) => k.r));
         const gcb = row ? { x0: u.x0, x1: u.x1, y0: cb.y0, y1: cb.y1 } : { x0: cb.x0, x1: cb.x1, y0: u.y0, y1: u.y1 };
         const L = layoutFlow(g, gcb, { dir: row ? 'row' : 'column' }, depth + 1);
-        const node = { type: 'frame', name: 'Group', width: r1(W(gcb)), height: r1(H(gcb)), style: { fills: [] }, layout: { ...L.layout, padding: L.pad.map(r1) }, children: L.children, sizing: { w: 'fixed', h: 'fixed' } };
+        const node = { type: 'frame', name: 'Group', width: up(W(gcb)), height: r1(H(gcb)), style: { fills: [] }, layout: { ...L.layout, padding: L.pad.map(r1) }, children: L.children, sizing: { w: 'fixed', h: 'fixed' } };
         return { node, r: gcb, members: g, hugW: row ? true : !L.fluid && L.hugCross, hugH: row ? L.hugCross : true, fluid: L.fluid, m: [0, 0, 0, 0], text: false };
       });
       return { items, gap: max };
