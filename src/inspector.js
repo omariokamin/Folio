@@ -891,8 +891,9 @@ window.Folio = window.Folio || {};
           (() => {
             const span = h('span');
             bind(span, () => {
-              const n = Object.keys(store.doc.nodes).length;
+              // counts the current page only (doc.roots is the page being viewed)
               const a = store.doc.roots.length;
+              const n = store.doc.roots.reduce((sum, r) => sum + 1 + store.descendants(r).length, 0);
               span.textContent = `${a} artboard${a === 1 ? '' : 's'} · ${n} layer${n === 1 ? '' : 's'}`;
             });
             return span;
