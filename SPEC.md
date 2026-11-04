@@ -507,3 +507,43 @@ a selection copied from a live website, a URL (via Claude Code / the MCP bridge)
 - Prompt: when the user gives code, a URL to recreate, or asks to bring their site/components into Folio →
   import first, then screenshot, then clean up (rename layers, link brand tokens, make repeated parts components).
   Mention that script-built pages may import nearly empty.
+
+---
+
+## Effects: liquid glass, shader-style gradients, metal logos (v0.9)
+
+Effects seen in WebGL/React libraries, rebuilt **natively** (CSS + SVG, zero dependencies) so Folio exports stay
+plain HTML/CSS/SVG. Inspiration only — no code copied from those projects.
+
+### Liquid glass (layer style)
+- `style.backdropSaturate` (percent, default 100) → `backdrop-filter: blur(..) saturate(..)` alongside
+  `backdropBlur` in css.js (both prefixed with `-webkit-`), round-tripped by the importer when present.
+- Inspector Effects section: a **Liquid glass** preset button that applies, to the selected frames: a translucent
+  linear fill (white 28% → 8%, 160°), backdropBlur 24, backdropSaturate 180, border 1px white 35%, shadows
+  `inset 0 1px 0 #ffffff80`, `inset 0 -1px 0 #ffffff1a` and a soft drop `0 8 32 -8 #0f172a2e`, radius 24 (or the brand's
+  radius-lg). Tinted variant for dark grounds (white 12% → 4%). Shown in the CSS preview like any style.
+- Folio can't refract (bend) the backdrop portably; say so in the guide. Glass only reads over something colourful.
+
+### Shader-style gradients (fills)
+- More mesh presets in the fill editor (keep the existing 5): **Aurora**, **Dusk**, **Lagoon**, **Ember**, **Chrome**
+  (base + 4 points + spread, each designed to pair with a noise fill at 0.08–0.15). A **"+ grain"** toggle on mesh
+  rows adds/removes a noise fill on top.
+- Brand gradient presets already exist; nothing changes there.
+
+### Metal logo version
+- `Folio.svg.versions(svg, brand)` gains `metal`: every paint becomes a shared chrome `linearGradient`
+  (stops: #fdfdfd 0, #b9bec6 30, #f4f5f7 50, #5e646e 72, #d9dce1 100, at a slight angle), plus a subtle specular
+  highlight via an SVG `<filter>` (feGaussianBlur → feSpecularLighting with feDistantLight → feComposite in=SourceAlpha
+  → feMerge with SourceGraphic). Must still read at 32 px.
+- The sanitizer whitelist adds the filter primitives this needs (filter, feGaussianBlur, feOffset,
+  feSpecularLighting, feDiffuseLighting, feDistantLight, fePointLight, feComposite, feMerge, feMergeNode,
+  feColorMatrix, feTurbulence, feDisplacementMap, feFlood, feBlend) with their numeric/enum attributes and
+  `filter="url(#id)"` (internal ids only). **Never** feImage or anything with an href.
+- Logo groups get an optional **metal** version (brand panel "Make versions" offers it; `save_logo` takes
+  `metal: true`). Label "Metal". Static image — no animation.
+
+### Claude's guide
+- A short "Effects" paragraph: glass at most on one floating layer, only over a colourful ground, with the preset
+  values; shader-style mesh + grain as the one rich-visual device per design; metal logo versions only when the user
+  asks (they suit dark, premium contexts; never the primary logo). Animated shader backgrounds are out of scope:
+  recommend pre-rendered video for motion.
