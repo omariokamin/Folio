@@ -41,14 +41,14 @@ that has access to it. Pick one of these:
 **Option A: GitHub Desktop (easiest)**
 
 1. Install GitHub Desktop from <https://desktop.github.com> and sign in with your GitHub account.
-2. Choose **File → Clone Repository…**, find `omariokamin/folio` in the list (or paste
-   `https://github.com/omariokamin/folio` in the URL tab), choose where to save it and click **Clone**.
+2. Choose **File → Clone Repository…**, find `omariokamin/Folio` in the list (or paste
+   `https://github.com/omariokamin/Folio` in the URL tab), choose where to save it and click **Clone**.
 3. Note the folder it was saved to (by default `Documents/GitHub/folio`).
 
 **Option B: Terminal**
 
 ```bash
-git clone https://github.com/omariokamin/folio
+git clone https://github.com/omariokamin/Folio
 ```
 
 If your Mac offers to install "command line developer tools", click **Install** and run the command
