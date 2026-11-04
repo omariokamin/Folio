@@ -507,3 +507,27 @@ a selection copied from a live website, a URL (via Claude Code / the MCP bridge)
 - Prompt: when the user gives code, a URL to recreate, or asks to bring their site/components into Folio →
   import first, then screenshot, then clean up (rename layers, link brand tokens, make repeated parts components).
   Mention that script-built pages may import nearly empty.
+
+---
+
+## Smart guides (v0.8)
+
+While the user **moves**, **resizes** or **draws** a layer that is positioned by x/y (artboards and children of
+freeform frames — not children of auto-layout frames, whose position comes from flexbox), its edges and centre
+snap to nearby edges and centres, with pink guide lines and distance labels.
+
+- Snap candidates: the left/centre/right x and top/centre/bottom y of (a) the parent frame's inner box (padding box),
+  (b) siblings in the same parent (artboards: other artboards on the page), visible and unlocked only, excluding the
+  layers being dragged and their descendants. Limit to the ~60 nearest candidates for speed.
+- Threshold: 6 **screen** px (divide by zoom for world units). Snap x and y independently, to the closest candidate.
+  Resizing snaps only the edges being dragged (and keeps the shift aspect lock working: snap the driving edge,
+  derive the other). Drawing a new frame/shape/text snaps its start point and its dragged corner.
+- Hold **⌘ / Ctrl** while dragging to turn snapping off for that gesture. Snapped positions are whole pixels.
+  A canvas toggle in the View/zoom menu: **Snap to layers** (on by default, remembered in localStorage).
+- Guides (overlay, screen space, 1px `#ff3b8d`, crisp at any zoom): a vertical/horizontal line spanning the snapped
+  layer and the layer it snapped to; small cross marks at the matched edges are a nice touch. **Distance labels**
+  (pink pill, white 11px text) show the gap in px to the nearest neighbour on each side along the snapped axis, and
+  to the parent edges when snapped to the parent. Guides disappear on pointerup.
+- Multi-selection moves as one box (snap the union bounds). Alt-drag duplicate and reparenting keep working.
+  Moves into an auto-layout frame (drop line) don't snap.
+- Performance: no layout thrash during drags — measure candidate boxes once at gesture start, then pure math.
