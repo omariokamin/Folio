@@ -4053,6 +4053,41 @@ window.Folio = window.Folio || {};
   const importUrl = () =>
     fail('import_url only works when Folio is driven from Claude Code (it needs a helper on the computer to fetch the page). Here, ask the user to paste the page\'s HTML into the chat (then use import_html) or into File → Import HTML…, or to ask again from Claude Code.', 'URL import needs Claude Code');
 
+  // ---------- code export (SPEC "Tailwind export (v0.10)") ----------
+  const CODE_FORMATS = ['html-css', 'tailwind-html', 'tailwind-react'];
+  const MAX_DATA_URL = 4000; // characters; bigger embedded images would flood the conversation
+
+  function exportCode(input) {
+    const store = S();
+    const notes = [];
+    const r = resolve(input.node_id != null ? input.node_id : input.id, notes);
+    if (r.error) return fail(r.error, 'Layer not found');
+    const node = r.node;
+    const format = String(input.format == null ? '' : input.format).trim().toLowerCase();
+    if (!CODE_FORMATS.includes(format)) return fail(`format must be one of ${CODE_FORMATS.join(', ')} (got ${str(input.format)}).`, 'Unknown format');
+    const ex = Folio.exporter;
+    const tw = Folio.tailwind;
+    if (format === 'html-css' ? !(ex && ex.htmlFor && ex.cssFor) : !(tw && tw.htmlFor && tw.jsxFor && tw.themeFor))
+      return fail(`The ${format} export is not available in this build of Folio.`, 'Export unavailable');
+    // render helpers read doc.roots (e.g. isRoot), so bind it to the layer's page
+    const blocks = onPage(pagesOn() ? store.pageOf(node.id) : null, () =>
+      format === 'html-css'
+        ? [['css', ex.cssFor(node.id)], ['html', ex.htmlFor(node.id)]]
+        : [['css', tw.themeFor(node.id)], format === 'tailwind-react' ? ['jsx', tw.jsxFor(node.id)] : ['html', tw.htmlFor(node.id)]]
+    );
+    let cut = 0;
+    // shortcut: also cuts a data: URL at a quote or paren inside it (rare, SVG only); fine while it is just a placeholder
+    const shorten = (code) =>
+      String(code || '').replace(/data:[^"'()\s]+/g, (m) => (m.length > MAX_DATA_URL ? (cut++, `${m.slice(0, m.indexOf(',') + 1)}…(${Math.round(m.length / 1024)} KB embedded image left out)`) : m));
+    const code = blocks.filter(([, c]) => c).map(([lang, c]) => `\n\n\`\`\`${lang}\n${shorten(c)}\n\`\`\``).join('');
+    const label = { 'html-css': 'HTML + CSS', 'tailwind-html': 'Tailwind CSS v4 (HTML)', 'tailwind-react': 'Tailwind CSS v4 (React)' }[format];
+    let text = `${label} for ${q(node.name)} (${node.id}).`;
+    if (cut) text += ` ${cut} embedded image${cut > 1 ? 's were' : ' was'} too big to include; ask the user to export ${cut > 1 ? 'them' : 'it'} from Folio (Export → PNG) or use their own file.`;
+    if (notes.length) text += ' ' + notes.join(' ');
+    text += code;
+    return result(text, `Exported ${q(node.name)} as ${label}`, []);
+  }
+
   const HANDLERS = {
     get_document: getDocument,
     get_tree: getTree,
@@ -4073,6 +4108,7 @@ window.Folio = window.Folio || {};
     manage_pages: managePages,
     import_html: importHtml,
     import_url: importUrl,
+    export_code: exportCode,
   };
 
   async function execute(name, input) {

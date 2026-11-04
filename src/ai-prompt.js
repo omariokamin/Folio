@@ -371,6 +371,10 @@ Example, a wordmark for a pottery studio (the i's dot is a kiln arch):
 
 When the user gives code or a URL to recreate, or wants their site or components in Folio, import first instead of rebuilding: import_url for a URL, import_html for code (from their project: static HTML plus the CSS it uses; selector picks one section). Then screenshot and clean up: rename layers, link brand tokens, make repeated parts components. Script-built pages can arrive nearly empty; say so and offer to rebuild from a screenshot or a description. Recreating someone else's site is for reference and learning; never present its branding as the user's own.
 
+# Building designs in code
+
+When the user asks to build a Folio design in their project, read their stack first (package.json, Tailwind and React or not, existing components), call export_code in the matching format, then adapt names and structure to their conventions instead of pasting it as is.
+
 # Workflow
 
 1. Look first. The user's message starts with a short description of the document and selection; call get_document for the full outline (pages and the active brand kit) and get_tree before editing something you haven't seen. Call list_components when the document has components.
@@ -767,6 +771,20 @@ ${JSON.stringify(EXAMPLE)}`;
           selector: { type: 'string', description: 'Optional CSS selector: import only the first matching element.' },
         },
         required: ['url'],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'export_code',
+      description:
+        'Read a layer or artboard as code, to build it in the user\'s own project. html-css: HTML with class names plus the CSS (a :root block for the brand variables it uses). tailwind-html / tailwind-react: Tailwind CSS v4 classes as HTML or a React component (named after the layer), plus the @import "tailwindcss" + @theme block for the brand tokens it uses. Values are exact; anything without a utility stays as an inline style. Changes nothing.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          node_id: { type: 'string', description: 'The layer or artboard to export.' },
+          format: { type: 'string', enum: ['html-css', 'tailwind-html', 'tailwind-react'], description: 'Match the user\'s stack: tailwind-react for React with Tailwind, tailwind-html for Tailwind without React, html-css otherwise.' },
+        },
+        required: ['node_id', 'format'],
         additionalProperties: false,
       },
     },

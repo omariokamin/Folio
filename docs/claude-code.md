@@ -151,6 +151,36 @@ Good to know:
 
 ---
 
+## Build a design into your own project
+
+Going the other way works too: once a design looks right in Folio, Claude Code can turn it into
+real code inside your own website or app.
+
+1. Start `claude` in your **project's** folder (this needs Folio set up for every folder; see
+   **Using Folio from any folder** below), with the Folio tab open.
+2. Select the artboard or layer in Folio, then ask something like:
+
+```
+Build the selected Folio design as a new page in this project
+```
+
+Claude first looks at how your project is made (plain HTML and CSS, Tailwind, React…), then reads
+the design from Folio as code in the matching style: **HTML + CSS**, **Tailwind (HTML)** or
+**Tailwind (React)**. It then fits that code into your project: file names, component names and
+the way your other pages are built. Folio's code is a starting point; Claude adapts it rather than
+pasting it in as is.
+
+Good to know:
+
+- **Nothing changes in Folio.** Reading the code doesn't touch your design.
+- **Brand colours and fonts come along** as CSS variables (or Tailwind theme tokens), so you can
+  match them to the ones your project already has. Ask Claude to do that.
+- **Big embedded images are left out** of the code to keep things fast. Claude will say so; export
+  them from Folio (**Export → PNG**) or use your own image files.
+- You can see the same code yourself in Folio's **Code** panel and copy it from there.
+
+---
+
 ## Good to know
 
 **Undo.** Press `⌘Z` in the Folio tab. Each burst of Claude's changes is one undo step, so one `⌘Z`

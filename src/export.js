@@ -203,21 +203,21 @@ window.Folio = window.Folio || {};
     return 'div';
   }
 
-  /** Shared HTML printer. attrFor(item) returns the attribute string for the opening tag. */
-  function printHtml(item, attrFor, indent = '') {
+  /** Shared HTML printer. attrFor(item) returns the attribute string for the opening tag (text/imgEnd: JSX). */
+  function printHtml(item, attrFor, indent = '', text = esc, imgEnd = '>') {
     const n = item.node;
     const tag = tagFor(n, item.depth);
     const attrs = attrFor(item);
     if (tag === 'img') {
       const src = resolveSrc((n.image && n.image.src) || '') || '';
-      return `${indent}<img${attrs} src="${escAttr(src)}" alt="${escAttr(n.name || '')}">`;
+      return `${indent}<img${attrs} src="${escAttr(src)}" alt="${escAttr(n.name || '')}"${imgEnd}`;
     }
     if (n.type === 'text') {
-      const content = esc((n.text && n.text.content) || '');
+      const content = text((n.text && n.text.content) || '');
       return `${indent}<${tag}${attrs}>${content}</${tag}>`;
     }
     if (!item.children.length) return `${indent}<${tag}${attrs}></${tag}>`;
-    const inner = item.children.map((c) => printHtml(c, attrFor, indent + '  ')).join('\n');
+    const inner = item.children.map((c) => printHtml(c, attrFor, indent + '  ', text, imgEnd)).join('\n');
     return `${indent}<${tag}${attrs}>\n${inner}\n${indent}</${tag}>`;
   }
 
@@ -543,6 +543,17 @@ ${html}
     toast(`Exported ${safeFilename(n.name)}.html`, 'success');
   }
 
+  /** Tailwind preview page (.html) or React component (.jsx, theme in a leading comment). */
+  function downloadTailwind(id, react) {
+    id = id || targetId();
+    if (!id || !Folio.tailwind) return;
+    const T = Folio.tailwind;
+    const name = safeFilename(store.get(id).name) + (react ? '.jsx' : '.tailwind.html');
+    const data = react ? `/* Tailwind v4 theme for your CSS:\n\n${T.themeFor(id)}\n*/\n\n${T.jsxFor(id)}` : T.pageFor(id);
+    download(name, data, react ? 'text/javascript' : 'text/html');
+    toast(`Exported ${name}`, 'success');
+  }
+
   async function copyCode(id) {
     id = id || targetId();
     if (!id) return;
@@ -565,12 +576,21 @@ ${html}
     exportPng,
     pngDataUrl,
     downloadPage,
+    downloadTailwind,
     copyCode,
     copyText,
     saveFile,
     openFile,
     loadText,
     download,
+    // shared with tailwind.js
+    esc,
+    plan,
+    stylesOf,
+    printHtml,
+    brandVars,
+    fontLinks,
+    RESET,
   };
 
   // =====================================================================

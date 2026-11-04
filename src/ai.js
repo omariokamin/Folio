@@ -78,6 +78,7 @@ window.Folio = window.Folio || {};
     manage_pages: 'Organising pages',
     import_html: 'Importing HTML',
     import_url: 'Importing a web page',
+    export_code: 'Exporting code',
   };
 
   const store = Folio.store;
