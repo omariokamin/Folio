@@ -9,6 +9,7 @@
  *   Folio.canvas.placeImage(src, name) -> Promise<node>
  *   Folio.canvas.createArtboard(preset) -> node
  *   Folio.canvas.frameAt(clientX, clientY) / flexDrop(frameId, worldPt) / contentOrigin(frameId)   (drop helpers)
+ *   Folio.canvas.snapEnabled() / setSnap(on)   smart guides toggle (localStorage "folio:snap")
  *
  * Every gesture mutates the store live (or shows a transient preview) and calls
  * store.commit() exactly once when it ends.
@@ -206,11 +207,12 @@ window.Folio = window.Folio || {};
     const pills = [];
     [[mx, 'x', 'y'], [my, 'y', 'x']].forEach(([m, ax, px]) => {
       if (!m) return;
-      const [a1, a2, p1, p2] = [ax + '1', ax + '2', px + '1', px + '2'];
+      // a = along the guide line, p = across it (the snapped axis)
+      const [a1, a2, p1, p2] = [px + '1', px + '2', ax + '1', ax + '2'];
       const o = m.box;
-      const seg = (along, from, to) => (ax === 'x' ? { x1: along, y1: from, x2: along, y2: to } : { x1: from, y1: along, x2: to, y2: along });
-      lines.push(seg(m.v, Math.min(b[p1], o[p1]), Math.max(b[p2], o[p2])));
-      // gaps to the nearest neighbour on each side along this axis (or the parent edges when snapped to it)
+      const seg = (across, from, to) => (ax === 'x' ? { x1: across, y1: from, x2: across, y2: to } : { x1: from, y1: across, x2: to, y2: across });
+      lines.push(seg(m.v, Math.min(b[a1], o[a1]), Math.max(b[a2], o[a2])));
+      // gaps along the guide to the nearest neighbour on each side (or the parent edges when snapped to it)
       let lo = o.parent ? o[a1] : -Infinity;
       let hi = o.parent ? o[a2] : Infinity;
       near.forEach((n) => {
@@ -221,7 +223,7 @@ window.Folio = window.Folio || {};
       const mid = (b[p1] + b[p2]) / 2;
       [[lo, b[a1]], [b[a2], hi]].forEach(([from, to]) => {
         if (!isFinite(from) || !isFinite(to) || to - from < 0.5) return;
-        const l = ax === 'x' ? { x1: from, y1: mid, x2: to, y2: mid } : { x1: mid, y1: from, x2: mid, y2: to };
+        const l = seg(mid, from, to);
         lines.push(l);
         pills.push({ x: (l.x1 + l.x2) / 2, y: (l.y1 + l.y2) / 2, text: String(Math.round((to - from) * 100) / 100) });
       });
