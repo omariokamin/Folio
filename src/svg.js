@@ -32,11 +32,12 @@ window.Folio = window.Folio || {};
   const ENUM = { operator: /^(over|in|out|atop|xor|arithmetic)$/, mode: /^(normal|multiply|screen|overlay|darken|lighten|color-dodge|color-burn|hard-light|soft-light|difference|exclusion|hue|saturation|color|luminosity)$/, type: /^(matrix|saturate|hueRotate|luminanceToAlpha|fractalNoise|turbulence)$/, stitchTiles: /^(stitch|noStitch)$/, xChannelSelector: /^[RGBA]$/, yChannelSelector: /^[RGBA]$/, filterUnits: /^(userSpaceOnUse|objectBoundingBox)$/, primitiveUnits: /^(userSpaceOnUse|objectBoundingBox)$/, 'color-interpolation-filters': /^(auto|sRGB|linearRGB)$/ };
   const ATTRS = canon([...STYLE_PROPS, ...Object.keys(NUM), ...Object.keys(ENUM), 'in', 'in2', 'result', 'transform', 'd', 'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r', 'rx', 'ry', 'fx', 'fy', 'dx', 'dy', 'width', 'height', 'points', 'offset', 'gradientUnits', 'gradientTransform', 'spreadMethod', 'clipPathUnits', 'maskUnits', 'maskContentUnits', 'preserveAspectRatio', 'id', 'viewBox', 'href']);
   const MAX_FILTER_PRIMITIVES = 64;
+  const MAX_FILTERED = 16; // elements drawn through a filter (each <use> of a filtered shape counts again)
   /** A filter region or light position (x/y/width/height on filter elements): a clamped number or percentage. */
   function region(v) {
     const m = /^\s*(-?[\d.]+(?:e[-+]?\d+)?)(%?)\s*$/i.exec(v);
     if (!m || !isFinite(+m[1])) return null;
-    const lim = m[2] ? 500 : 1e4;
+    const lim = m[2] ? 200 : 1e4;
     return Math.min(lim, Math.max(-lim, +m[1])) + m[2];
   }
   const PAINTS = ['fill', 'stroke', 'stop-color'];
@@ -237,6 +238,14 @@ window.Folio = window.Folio || {};
         dropped.add('filter (missing target)');
       }
     });
+    // every filtered element is an offscreen render pass; thousands of them freeze the page
+    const passes = (e) => (e && e.hasAttribute('filter') ? 1 : 0) + (e ? e.querySelectorAll('[filter]').length : 0);
+    const byId = new Map(Array.from(root.querySelectorAll('[id]')).map((t) => [t.getAttribute('id'), t]));
+    const uses = Array.from(root.querySelectorAll('use')).map((u) => passes(byId.get(u.getAttribute('href').slice(1))));
+    if (root.querySelectorAll('[filter]').length + uses.reduce((a, b) => a + b, 0) > MAX_FILTERED) {
+      root.querySelectorAll('[filter]').forEach((e) => e.removeAttribute('filter'));
+      dropped.add(`filters (used on more than ${MAX_FILTERED} shapes)`);
+    }
 
     // a viewBox is required; derive it from width/height when missing
     let vb = nums(root.getAttribute('viewBox'));
