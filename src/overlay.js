@@ -9,6 +9,7 @@
  *       dropTarget: frame id to highlight | null
  *       dropLine:   {x1,y1,x2,y2} insertion line, world coords | null
  *       move:       {ids:Set, dx, dy} world offset of nodes being dragged | null
+ *       snap:       {lines:[{x1,y1,x2,y2}], pills:[{x,y,text}]} smart guides, world coords | null
  *       hideHover, hideHandles: booleans
  *
  * Everything here stays a constant size on screen regardless of zoom.
@@ -25,6 +26,7 @@ window.Folio = window.Folio || {};
     dropTarget: null,
     dropLine: null,
     move: null,
+    snap: null,
     hideHover: false,
     hideHandles: false,
   };
@@ -326,6 +328,32 @@ window.Folio = window.Folio || {};
         el.style.height = Math.max(2, Math.abs(y2 - y1)) + 'px';
         el.style.transform = `translate(${snap(x1) - 1}px, ${snap(Math.min(y1, y2))}px)`;
       }
+    }
+
+    // smart guides: 1px pink lines + distance pills
+    if (guides.snap) {
+      const px = 1 / dpr();
+      guides.snap.lines.forEach((L) => {
+        const x1 = L.x1 * z + v.x;
+        const y1 = L.y1 * z + v.y;
+        const x2 = L.x2 * z + v.x;
+        const y2 = L.y2 * z + v.y;
+        const el = take('snap');
+        if (y1 === y2) {
+          el.style.width = Math.max(px, snap(x2) - snap(x1)) + 'px';
+          el.style.height = '1px';
+          el.style.transform = `translate(${snap(x1)}px, ${snap(y1 - 0.5)}px)`;
+        } else {
+          el.style.width = '1px';
+          el.style.height = Math.max(px, snap(y2) - snap(y1)) + 'px';
+          el.style.transform = `translate(${snap(x1 - 0.5)}px, ${snap(y1)}px)`;
+        }
+      });
+      guides.snap.pills.forEach((P) => {
+        const el = take('pill');
+        if (el.textContent !== P.text) el.textContent = P.text;
+        el.style.transform = `translate(${snap(P.x * z + v.x)}px, ${snap(P.y * z + v.y)}px) translate(-50%, -50%)`;
+      });
     }
 
     // marquee

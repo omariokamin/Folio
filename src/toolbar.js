@@ -275,6 +275,13 @@ window.Folio = window.Folio || {};
           action: () => c.zoomToSelection(),
         },
         { sep: true },
+        {
+          label: 'Snap to layers',
+          checked: has('snapEnabled') && c.snapEnabled(),
+          disabled: !has('setSnap'),
+          action: () => c.setSnap(!c.snapEnabled()),
+        },
+        { sep: true },
         { label: '50%', checked: Math.abs(z - 0.5) < 0.001, action: () => setZoom(0.5) },
         { label: '100%', shortcut: fmt('mod+0'), checked: Math.abs(z - 1) < 0.001, action: () => setZoom(1) },
         { label: '200%', checked: Math.abs(z - 2) < 0.001, action: () => setZoom(2) },

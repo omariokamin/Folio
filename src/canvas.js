@@ -9,6 +9,7 @@
  *   Folio.canvas.placeImage(src, name) -> Promise<node>
  *   Folio.canvas.createArtboard(preset) -> node
  *   Folio.canvas.frameAt(clientX, clientY) / flexDrop(frameId, worldPt) / contentOrigin(frameId)   (drop helpers)
+ *   Folio.canvas.snapEnabled() / setSnap(on)   smart guides toggle (localStorage "folio:snap")
  *
  * Every gesture mutates the store live (or shows a transient preview) and calls
  * store.commit() exactly once when it ends.
@@ -131,6 +132,103 @@ window.Folio = window.Folio || {};
     const b = layoutBox(frameId) || { x: 0, y: 0 };
     const bw = borderW(store.get(frameId));
     return { x: b.x + bw, y: b.y + bw };
+  }
+
+  // ---------- smart guides (snap to siblings and the parent's padding box) ----------
+  const SNAP_PX = 6; // screen px
+  const SNAP_MAX = 60; // nearest candidate boxes considered per pointer move
+  const SNAP_KEY = 'folio:snap';
+  let snapOn = true;
+  try {
+    snapOn = localStorage.getItem(SNAP_KEY) !== '0';
+  } catch (err) {
+    /* storage blocked: default on */
+  }
+  function setSnap(on) {
+    snapOn = !!on;
+    try {
+      localStorage.setItem(SNAP_KEY, snapOn ? '1' : '0');
+    } catch (err) {
+      /* ignore */
+    }
+  }
+  const snapAllowed = (e) => snapOn && !(e && (e.metaKey || e.ctrlKey));
+  const edges = (r) => ({ x1: r.x, y1: r.y, x2: r.x + r.width, y2: r.y + r.height });
+
+  /** Candidate boxes for layers placed by x/y in `parentId` (null = the page's artboards), measured once.
+   *  null when the parent is auto layout (flexbox positions its children). */
+  function snapContext(parentId, excluded) {
+    const pn = parentId ? store.get(parentId) : null;
+    if (parentId && (!pn || isFlex(pn))) return null;
+    const boxes = [];
+    (pn ? pn.children : store.doc.roots).forEach((id) => {
+      const n = store.get(id);
+      if (!n || n.visible === false || n.locked || (excluded && excluded.has(id))) return;
+      const r = nodeRect(id);
+      if (r) boxes.push(edges(r));
+    });
+    let inner = null;
+    if (pn) {
+      const b = layoutBox(parentId);
+      const bw = borderW(pn);
+      if (b) inner = { x1: b.x + bw, y1: b.y + bw, x2: b.x + b.width - bw, y2: b.y + b.height - bw, parent: true };
+    }
+    return { boxes, inner };
+  }
+  /** The SNAP_MAX candidate boxes closest to box b (pure math). */
+  function nearBoxes(ctx, b) {
+    if (ctx.boxes.length <= SNAP_MAX) return ctx.boxes;
+    const cx = (b.x1 + b.x2) / 2;
+    const cy = (b.y1 + b.y2) / 2;
+    const d = (o) => Math.abs((o.x1 + o.x2) / 2 - cx) + Math.abs((o.y1 + o.y2) / 2 - cy);
+    return ctx.boxes.map((o) => [d(o), o]).sort((p, q) => p[0] - q[0]).slice(0, SNAP_MAX).map((p) => p[1]);
+  }
+  /** Closest match of any feature value (world) to an edge/centre of a candidate on axis 'x' | 'y'. */
+  function snapAxis(ctx, near, feats, ax) {
+    if (!feats.length) return null;
+    const t = SNAP_PX / store.viewport.zoom;
+    const a1 = ax + '1';
+    const a2 = ax + '2';
+    let best = null;
+    const test = (o) =>
+      [o[a1], (o[a1] + o[a2]) / 2, o[a2]].forEach((v) =>
+        feats.forEach((f) => {
+          const d = v - f;
+          if (Math.abs(d) <= t && (!best || Math.abs(d) < Math.abs(best.d))) best = { d, v, box: o };
+        })
+      );
+    near.forEach(test);
+    if (ctx.inner) test(ctx.inner);
+    return best;
+  }
+  /** Guide lines + distance pills (world coords) for a box b snapped by matches mx / my. */
+  function snapGuides(ctx, near, b, mx, my) {
+    const lines = [];
+    const pills = [];
+    [[mx, 'x', 'y'], [my, 'y', 'x']].forEach(([m, ax, px]) => {
+      if (!m) return;
+      // a = along the guide line, p = across it (the snapped axis)
+      const [a1, a2, p1, p2] = [px + '1', px + '2', ax + '1', ax + '2'];
+      const o = m.box;
+      const seg = (across, from, to) => (ax === 'x' ? { x1: across, y1: from, x2: across, y2: to } : { x1: from, y1: across, x2: to, y2: across });
+      lines.push(seg(m.v, Math.min(b[a1], o[a1]), Math.max(b[a2], o[a2])));
+      // gaps along the guide to the nearest neighbour on each side (or the parent edges when snapped to it)
+      let lo = o.parent ? o[a1] : -Infinity;
+      let hi = o.parent ? o[a2] : Infinity;
+      near.forEach((n) => {
+        if (!(n[p1] < b[p2] && n[p2] > b[p1])) return;
+        if (n[a2] <= b[a1] + 0.01 && n[a2] > lo) lo = n[a2];
+        if (n[a1] >= b[a2] - 0.01 && n[a1] < hi) hi = n[a1];
+      });
+      const mid = (b[p1] + b[p2]) / 2;
+      [[lo, b[a1]], [b[a2], hi]].forEach(([from, to]) => {
+        if (!isFinite(from) || !isFinite(to) || to - from < 0.5) return;
+        const l = seg(mid, from, to);
+        lines.push(l);
+        pills.push({ x: (l.x1 + l.x2) / 2, y: (l.y1 + l.y2) / 2, text: String(Math.round((to - from) * 100) / 100) });
+      });
+    });
+    return lines.length ? { lines, pills } : null;
   }
 
   // ---------- hit testing ----------
@@ -396,7 +494,7 @@ window.Folio = window.Folio || {};
     if (g.type === 'pan') vp.classList.remove('is-panning');
     if (g.type === 'resize' || g.type === 'draw') store.commit(g.type === 'resize' ? 'Resize' : 'Draw');
     if (g.type === 'marquee') Folio.overlay.setGuides({ marquee: null });
-    Folio.overlay.setGuides({ hideHover: false, hideHandles: false, marquee: null, dropTarget: null, dropLine: null, move: null });
+    Folio.overlay.setGuides({ hideHover: false, hideHandles: false, marquee: null, dropTarget: null, dropLine: null, move: null, snap: null });
   }
 
   /** Re-run the active gesture (after a modifier key change or a wheel pan mid-drag). */
@@ -479,8 +577,9 @@ window.Folio = window.Folio || {};
       excluded.add(id);
       store.descendants(id).forEach((d) => excluded.add(d));
     });
+    const u = unionRect(ids); // rotated layers snap their bounding box
     ids.forEach((id) => (ghosts[id] = makeGhost(id, starts[id])));
-    Object.assign(g, { type: 'move', ids, starts, ghosts, excluded, dx: 0, dy: 0, alt: false, drop: null });
+    Object.assign(g, { type: 'move', ids, starts, ghosts, excluded, dx: 0, dy: 0, alt: false, drop: null, box: u && edges(u), snapCtx: new Map() });
     gesture = g;
     store.setHover(null);
     Folio.overlay.setGuides({ hideHover: true, hideHandles: true });
@@ -529,19 +628,9 @@ window.Folio = window.Folio || {};
       if (Math.abs(dx) > Math.abs(dy)) dy = 0;
       else dx = 0;
     }
-    g.dx = dx;
-    g.dy = dy;
+    const lockX = e.shiftKey && dx === 0;
+    const lockY = e.shiftKey && dy === 0;
     g.alt = !!e.altKey;
-    g.ids.forEach((id) => {
-      const gh = g.ghosts[id];
-      const src = R().el(id);
-      if (gh) {
-        const rot = Number(gh.dataset.rot) || 0;
-        gh.style.transform = `translate(${dx}px, ${dy}px)` + (rot ? ` rotate(${rot}deg)` : '');
-      }
-      if (src) src.classList.toggle('f-drag-source', !g.alt);
-    });
-    lockCursor(g.alt ? 'copy' : 'default');
 
     // drop target
     let target = frameAt(e.clientX, e.clientY, g.excluded, g.ids);
@@ -555,7 +644,38 @@ window.Folio = window.Folio || {};
       if (!inside) target = null;
     }
     const tn = target ? store.get(target) : null;
-    const guides = { move: { ids: new Set(g.ids), dx, dy }, dropTarget: null, dropLine: null };
+
+    // smart guides: only where the layers land by x/y (canvas or a freeform frame)
+    let snap = null;
+    if (g.box && snapAllowed(e) && !isFlex(tn)) {
+      const key = target || '';
+      if (!g.snapCtx.has(key)) g.snapCtx.set(key, snapContext(target, g.excluded));
+      const ctx = g.snapCtx.get(key);
+      if (ctx) {
+        const b0 = g.box;
+        const b = { x1: b0.x1 + dx, y1: b0.y1 + dy, x2: b0.x2 + dx, y2: b0.y2 + dy };
+        const near = nearBoxes(ctx, b);
+        const mx = lockX ? null : snapAxis(ctx, near, [b.x1, (b.x1 + b.x2) / 2, b.x2], 'x');
+        const my = lockY ? null : snapAxis(ctx, near, [b.y1, (b.y1 + b.y2) / 2, b.y2], 'y');
+        if (mx) dx = Math.round(b0.x1 + dx + mx.d) - b0.x1; // whole-pixel result
+        if (my) dy = Math.round(b0.y1 + dy + my.d) - b0.y1;
+        if (mx || my) snap = snapGuides(ctx, near, { x1: b0.x1 + dx, y1: b0.y1 + dy, x2: b0.x2 + dx, y2: b0.y2 + dy }, mx, my);
+      }
+    }
+    g.dx = dx;
+    g.dy = dy;
+    g.ids.forEach((id) => {
+      const gh = g.ghosts[id];
+      const src = R().el(id);
+      if (gh) {
+        const rot = Number(gh.dataset.rot) || 0;
+        gh.style.transform = `translate(${dx}px, ${dy}px)` + (rot ? ` rotate(${rot}deg)` : '');
+      }
+      if (src) src.classList.toggle('f-drag-source', !g.alt);
+    });
+    lockCursor(g.alt ? 'copy' : 'default');
+
+    const guides = { move: { ids: new Set(g.ids), dx, dy }, dropTarget: null, dropLine: null, snap };
     let beforeId = null;
     if (tn && isFlex(tn)) {
       const fd = flexDrop(target, w, g.excluded);
@@ -639,7 +759,7 @@ window.Folio = window.Folio || {};
       if (src) src.classList.remove('f-drag-source');
     });
     world.querySelectorAll('.f-ghost').forEach((el) => el.remove());
-    Folio.overlay.setGuides({ move: null, dropTarget: null, dropLine: null, hideHover: false, hideHandles: false });
+    Folio.overlay.setGuides({ move: null, dropTarget: null, dropLine: null, snap: null, hideHover: false, hideHandles: false });
   }
 
   function endMove(e) {
@@ -719,6 +839,10 @@ window.Folio = window.Folio || {};
       rot: box.rotation || 0,
       flexChild: isFlex(parent),
       changed: false,
+      bx: box.x,
+      by: box.y,
+      // shortcut: rotated layers resize without snapping, upgrade by snapping their rotated edges
+      snapCtx: box.rotation || isFlex(parent) ? null : snapContext(n.parent || null, new Set([id])),
     };
     const el = e.target;
     lockCursor((el && el.style.cursor) || 'default');
@@ -744,12 +868,31 @@ window.Folio = window.Folio || {};
     if (g.hx) w = g.w0 + g.hx * lx * mul;
     if (g.hy) h = g.h0 + g.hy * ly * mul;
     const keepRatio = e.shiftKey && g.w0 > 0 && g.h0 > 0;
+    const xDrives = !!g.hx && (!g.hy || !keepRatio || Math.abs(w / g.w0) >= Math.abs(h / g.h0));
+    const yDrives = !!g.hy && (!keepRatio || !xDrives);
+    // snap only the dragged edges (with shift: the driving one, the other is derived below)
+    const ctx = snapAllowed(e) ? g.snapCtx : null;
+    let near = null;
+    let mx = null;
+    let my = null;
+    if (ctx) {
+      near = nearBoxes(ctx, { x1: g.bx, y1: g.by, x2: g.bx + g.w0, y2: g.by + g.h0 });
+      const edge = (h0, b0, k, size) => (fromCenter ? b0 + h0 / 2 + (k * size) / 2 : k > 0 ? b0 + size : b0 + h0 - size);
+      const size = (h0, b0, k, pos) => (fromCenter ? 2 * k * (pos - b0 - h0 / 2) : k > 0 ? pos - b0 : b0 + h0 - pos);
+      if (xDrives) {
+        const ex = edge(g.w0, g.bx, g.hx, w);
+        mx = snapAxis(ctx, near, [ex], 'x');
+        if (mx) w = size(g.w0, g.bx, g.hx, Math.round(ex + mx.d));
+      }
+      if (yDrives) {
+        const ey = edge(g.h0, g.by, g.hy, h);
+        my = snapAxis(ctx, near, [ey], 'y');
+        if (my) h = size(g.h0, g.by, g.hy, Math.round(ey + my.d));
+      }
+    }
     if (keepRatio) {
       const ratio = g.w0 / g.h0;
-      if (g.hx && g.hy) {
-        if (Math.abs(w / g.w0) >= Math.abs(h / g.h0)) h = w / ratio;
-        else w = h * ratio;
-      } else if (g.hx) h = w / ratio;
+      if (xDrives) h = w / ratio;
       else w = h * ratio;
     }
     w = Math.max(1, Math.round(w));
@@ -785,10 +928,17 @@ window.Folio = window.Folio || {};
     }
     g.changed = true;
     store.update(g.id, patch);
+    let snap = null;
+    if (mx || my) {
+      const x1 = g.bx + patch.x - g.x0;
+      const y1 = g.by + patch.y - g.y0;
+      snap = snapGuides(ctx, near, { x1, y1, x2: x1 + w, y2: y1 + h }, mx, my);
+    }
+    Folio.overlay.setGuides({ snap });
   }
 
   function endResize() {
-    Folio.overlay.setGuides({ hideHover: false });
+    Folio.overlay.setGuides({ hideHover: false, snap: null });
     if (gesture.changed) store.commit('Resize');
   }
 
@@ -797,19 +947,22 @@ window.Folio = window.Folio || {};
     const tool = store.tool;
     const p = clientToWorld(e.clientX, e.clientY);
     const parent = frameAt(e.clientX, e.clientY);
+    const snapCtx = snapContext(parent, null);
+    const sp = snapAllowed(e) ? snapPoint(snapCtx, p) : null;
     gesture = {
       type: 'draw',
       tool,
       sx: e.clientX,
       sy: e.clientY,
-      wx: Math.round(p.x),
-      wy: Math.round(p.y),
+      wx: Math.round(sp ? sp.x : p.x),
+      wy: Math.round(sp ? sp.y : p.y),
       parent,
       origin: contentOrigin(parent),
       index: undefined,
       nodeId: null,
       moved: false,
       box: null,
+      snapCtx,
     };
     const pn = parent && store.get(parent);
     if (isFlex(pn)) {
@@ -819,8 +972,19 @@ window.Folio = window.Folio || {};
     store.setHover(null);
   }
 
+  /** Snap a world point to the candidates (drawing): { x, y, mx, my, near } or null. */
+  function snapPoint(ctx, p) {
+    if (!ctx) return null;
+    const near = nearBoxes(ctx, { x1: p.x, y1: p.y, x2: p.x, y2: p.y });
+    const mx = snapAxis(ctx, near, [p.x], 'x');
+    const my = snapAxis(ctx, near, [p.y], 'y');
+    return { x: mx ? mx.v : p.x, y: my ? my.v : p.y, mx, my, near };
+  }
+
   function drawBox(g, e) {
-    const p = clientToWorld(e.clientX, e.clientY);
+    const sp = snapAllowed(e) ? snapPoint(g.snapCtx, clientToWorld(e.clientX, e.clientY)) : null;
+    g.snapPt = sp && (sp.mx || sp.my) ? sp : null;
+    const p = sp || clientToWorld(e.clientX, e.clientY);
     let x1 = Math.round(p.x);
     let y1 = Math.round(p.y);
     let w = x1 - g.wx;
@@ -860,6 +1024,8 @@ window.Folio = window.Folio || {};
     g.moved = true;
     const box = drawBox(g, e);
     g.box = box;
+    const sp = g.snapPt;
+    Folio.overlay.setGuides({ snap: sp && snapGuides(g.snapCtx, sp.near, edges(box), sp.mx, sp.my) });
     if (g.tool === 'frame' || g.tool === 'rect' || g.tool === 'ellipse') {
       const pos = relPos(g, box);
       if (!g.nodeId) {
@@ -879,7 +1045,7 @@ window.Folio = window.Folio || {};
 
   function endDraw(e) {
     const g = gesture;
-    Folio.overlay.setGuides({ marquee: null });
+    Folio.overlay.setGuides({ marquee: null, snap: null });
     const tool = g.tool;
     if (tool === 'text') {
       createText(g, g.moved ? g.box : null);
@@ -1418,6 +1584,8 @@ window.Folio = window.Folio || {};
     isEditing: () => !!editing,
     placeImage,
     createArtboard,
+    snapEnabled: () => snapOn,
+    setSnap,
     hitPath,
     frameAt,
     flexDrop,
