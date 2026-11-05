@@ -8,7 +8,7 @@
 window.Folio = window.Folio || {};
 
 (function () {
-  Folio.version = '0.10.0';
+  Folio.version = '0.11.0';
 
   const MODULES = ['brand', 'components', 'render', 'canvas', 'inspector', 'layers', 'brandPanel', 'componentsPanel', 'toolbar', 'codePanel', 'importer', 'prototype', 'prototypePanel', 'shortcuts', 'ai', 'bridge'];
 

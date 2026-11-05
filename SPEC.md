@@ -669,7 +669,7 @@ instance's overrides by name path). Its click interactions still apply. Touch de
   else `page.start`, else the first artboard.
 - Player: screen fitted to the window (scale down to fit; a screen taller than the window at its width scrolls
   vertically instead), centred on a neutral background. Navigate pushes history; Back pops (closes the top
-  overlay first). Overlay: shows the target artboard on a backdrop at its position, click outside (if allowed)
+  overlay first). Overlay: shows the target artboard on a backdrop over the visible part of the current screen, at its position, click outside (if allowed)
   or Esc closes; `close` closes the top overlay. URL: `window.open(url, '_blank', 'noopener')`.
   Transitions: CSS animations, ease-out; slide back reverses direction; `prefers-reduced-motion` → instant.
   Clicking a spot with no interaction briefly highlights the clickable layers (hint). Accessibility: clickable

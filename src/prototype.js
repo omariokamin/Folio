@@ -264,15 +264,27 @@ img { display: block; max-width: none; }
       if (!el) return;
       var w = el.offsetWidth || 1;
       var h = el.offsetHeight || 1;
-      var s = Math.min(1, window.innerWidth / w);
-      if (overlay) s = Math.min(s, window.innerHeight / h);
+      var box = overlay ? wrap.parentNode : null;
+      var s = Math.min(1, (box ? box.clientWidth : window.innerWidth) / w);
+      if (box) s = Math.min(s, box.clientHeight / h);
       wrap.style.width = w * s + 'px';
       wrap.style.height = h * s + 'px';
       sc.style.transform = s < 1 ? 'scale(' + s + ')' : '';
     }
+    // overlays sit on the visible part of the current screen, like a sheet inside a phone
+    // shortcut: placed when opened and on resize, not while the stage scrolls (the overlay is modal anyway)
+    function place(layer) {
+      var r = curWrap ? curWrap.getBoundingClientRect() : { top: 0, left: 0, right: window.innerWidth, bottom: window.innerHeight };
+      var t = Math.max(0, r.top), l = Math.max(0, r.left);
+      layer.style.inset = 'auto';
+      layer.style.top = t + 'px';
+      layer.style.left = l + 'px';
+      layer.style.width = Math.max(0, Math.min(window.innerWidth, r.right) - l) + 'px';
+      layer.style.height = Math.max(0, Math.min(window.innerHeight, r.bottom) - t) + 'px';
+    }
     function refit() {
       if (curWrap) fit(curWrap);
-      overlays.forEach(function (o) { fit(o.wrap, true); });
+      overlays.forEach(function (o) { place(o.layer); fit(o.wrap, true); });
     }
     // slide 'left' = the new screen moves left (enters from the right); back plays the opposite direction
     var OFF = { left: ['100vw', '0'], right: ['-100vw', '0'], up: ['0', '100vh'], down: ['0', '-100vh'] };
@@ -334,6 +346,7 @@ img { display: block; max-width: none; }
       var wrap = mount(it.target);
       layer.appendChild(wrap);
       document.body.appendChild(layer);
+      place(layer);
       fit(wrap, true);
       var tr = it.transition;
       if (tr && tr.type !== 'instant') animate(layer, { type: 'dissolve', duration: tr.duration }, 'in');
