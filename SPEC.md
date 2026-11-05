@@ -618,3 +618,84 @@ when it matches exactly, an arbitrary class otherwise (`p-4` for 16px, `p-4.5` f
   end) → the code as text (+ the theme/CSS), so Claude Code can implement a Folio design in the user's codebase.
   A short guide line: when the user asks to build a Folio design in their project, read their stack first, use
   `export_code` in the matching format, then adapt names and structure to their conventions.
+
+---
+
+## Prototyping (v0.11)
+
+Wire artboards into a clickable flow, play it full-screen inside Folio, or export one HTML file to share.
+In v0.11: navigate, back, open link, overlays, hover states from variants, scrolling frames.
+Transitions: instant, dissolve, slide. Interactions start on click (hover comes from variants).
+
+### Data (in the document → saved, undone, copied with the layer)
+```
+node.interactions = [ {
+  trigger: 'click',
+  action: 'navigate' | 'back' | 'url' | 'overlay' | 'close',
+  target: '<artboard id>',               // navigate / overlay: an artboard on the SAME page
+  url: 'https://…',                      // url: http(s):, mailto:, tel: only
+  transition: { type: 'instant' | 'dissolve' | 'slide', direction: 'left'|'right'|'up'|'down', duration: 300 },
+  overlay: { position: 'center'|'top'|'bottom'|'left'|'right', closeOnOutside: true, backdrop: '#0f172a66' },
+} ]
+node.scroll = 'none' | 'vertical' | 'horizontal' | 'both'   // frames; play/export: overflow auto on that axis
+page.start = '<artboard id>' | undefined                    // start screen; default = the page's first artboard
+```
+- Absent fields mean "none"; omit defaults when storing. `Folio.prototype.normalize(nodeId, list)` →
+  `{ interactions, warnings }` is THE validator (used by the panel and Claude's tool): drops unknown actions,
+  targets that are not artboards on the node's page (or the node's own artboard for navigate), bad URLs; fills
+  defaults (transition instant, duration 300 clamped 0–2000, overlay center + closeOnOutside + backdrop).
+- Canvas: a scrolling frame clips like `style.clip` (content stays editable by selecting layers); play/export
+  scroll it (`overflow-x/y: auto`), via `Folio.css.nodeStyles` `mode: 'play'` (export and canvas unchanged
+  otherwise). The HTML/CSS and Tailwind exports also emit the overflow for scroll frames.
+- Components: `interactions` and `scroll` follow the main inside instances; the instance ROOT owns its own
+  `interactions` (add to `ROOT_OWN`), so each Button instance can go somewhere different.
+- Deleting an artboard leaves dangling targets; they are ignored at play time and shown as "Missing screen"
+  in the panel (no data rewrite, so undo stays simple).
+
+### Hover states (no data)
+In play/export, a direct instance whose component belongs to a set with a variant property that has a value
+`Hover` (case-insensitive) shows that variant while the pointer is over it (same other prop values; carry the
+instance's overrides by name path). Its click interactions still apply. Touch devices: no hover.
+
+### Runtime — `src/prototype.js` → `Folio.prototype`
+- `bundleFor(pageId?)` → `{ name, start, screens: { [artboardId]: { name, width, height, html, css } },
+  interactions: { [nodeId]: [...] }, hovers: { [nodeId]: { html } } }`, built from `Folio.exporter` (same
+  markup/CSS as the HTML export, elements carry `data-fid="<node id>"` for binding). Must not modify the
+  document or history (render hover variants off-document or undo any temporary change without commit/autosave).
+- `fileFor(pageId?)` → one self-contained HTML file: fonts link, the bundle as JSON, a small inline player
+  script (no external JS). `play(startId?)` opens the in-app player: a full-screen `#play-root` with an
+  `<iframe srcdoc>` of `fileFor` (one code path for app and export), top bar (screen name + screen menu,
+  Restart, Close). `stop()`. Starting screen: the selected artboard (or the artboard holding the selection),
+  else `page.start`, else the first artboard.
+- Player: screen fitted to the window (scale down to fit; a screen taller than the window at its width scrolls
+  vertically instead), centred on a neutral background. Navigate pushes history; Back pops (closes the top
+  overlay first). Overlay: shows the target artboard on a backdrop at its position, click outside (if allowed)
+  or Esc closes; `close` closes the top overlay. URL: `window.open(url, '_blank', 'noopener')`.
+  Transitions: CSS animations, ease-out; slide back reverses direction; `prefers-reduced-motion` → instant.
+  Clicking a spot with no interaction briefly highlights the clickable layers (hint). Accessibility: clickable
+  layers get `role="button"` (links `role="link"`), `tabindex="0"`, Enter/Space activate, visible focus ring.
+- Toolbar: **Play** button (▶) next to Code; shortcut ⌥⌘↵ (Alt+Ctrl+Enter). Esc exits play. Export menu:
+  **Prototype (HTML)** → downloads `<Page name>.prototype.html`.
+
+### Editor — `src/prototype-panel.js` → `Folio.prototypePanel`, `styles/prototype.css`
+- Right panel tabs: **Design · Prototype · AI** (tabs live in `src/ai.js` `buildTabs/setTab`; the Prototype tab
+  shows `#prototype-panel` and hides the inspector). Remembered like the AI tab.
+- Panel, layer selected: list of interactions, "+ Add interaction": **On click → Navigate to ▾ (artboards on
+  this page) | Back | Open link | Open overlay ▾ | Close overlay**; transition (Instant / Dissolve / Slide +
+  direction arrows, duration); overlay position + "Close when clicking outside"; remove. Frames: **Scroll**
+  (None / Vertical / Horizontal / Both). Artboard selected: "Start screen" toggle. Nothing selected: page start
+  screen dropdown, flow summary, **Play** button. Every edit goes through `normalize` + `store.update` + one
+  `commit()`.
+- Canvas (while the Prototype tab is open, drawn in `#canvas-overlay`, screen coordinates): curved arrows from
+  each layer with navigate/overlay interactions to the target artboard's left edge (dashed for overlays);
+  arrows of the selection highlighted, others faint; a "▶ Start" flag on the start artboard. A round handle on
+  the selected layer's right edge: drag it onto an artboard to add (or retarget the first) navigate interaction,
+  with a live arrow and the drop artboard highlighted; dropping elsewhere cancels.
+
+### AI
+- New tool `set_interactions` (appended at the end) `{ node_id, interactions?: [...] (replaces; [] clears),
+  scroll?, start?: true }` → validated through `normalize`, returns the stored list + warnings. `get_tree` /
+  node descriptions mention interactions (`→ Pricing (slide left)`) and scroll; `get_document` names the start screen.
+- Guide lines: wire the main CTAs, nav links and back buttons; overlays for modals/menus/sheets; to get hover
+  states, add a `State=Hover` variant; long content in a phone screen → a scroll frame; tell the user to press
+  Play (▶) to try it.
