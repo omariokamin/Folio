@@ -151,6 +151,36 @@ Good to know:
 
 ---
 
+## Make it clickable
+
+Once you have a few screens (artboards) on one page, Claude can link them into a prototype you can
+click through, like a real app or website. Ask something like:
+
+```
+Make this a clickable prototype: the Sign up button goes to the Welcome screen, and every Back button goes back
+```
+
+```
+Open the menu as an overlay when I tap the menu icon, and make the long list on the Home screen scroll
+```
+
+```
+Start the prototype on the Login screen and give the buttons a hover state
+```
+
+Then press **Play** (▶) in Folio's toolbar to try it. Click through the screens; press `Esc` to
+stop. To share it, choose **Export → Prototype (HTML)**: you get one file that opens in any web
+browser.
+
+Good to know:
+
+- **Screens link within one page.** Put the screens of one flow on the same page.
+- **Buttons can also open real links** (a website, an email address or a phone number).
+- **Hover states** come from component variants: Claude adds a "Hover" version of the button.
+- You can see and change every link yourself in the **Prototype** tab on the right.
+
+---
+
 ## Build a design into your own project
 
 Going the other way works too: once a design looks right in Folio, Claude Code can turn it into

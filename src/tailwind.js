@@ -109,6 +109,8 @@ window.Folio = window.Folio || {};
     'justify-content': { 'flex-start': 'justify-start', center: 'justify-center', 'flex-end': 'justify-end', 'space-between': 'justify-between', 'space-around': 'justify-around', 'space-evenly': 'justify-evenly' },
     'align-items': { 'flex-start': 'items-start', center: 'items-center', 'flex-end': 'items-end', stretch: 'items-stretch', baseline: 'items-baseline' },
     overflow: { hidden: 'overflow-hidden', visible: 'overflow-visible', auto: 'overflow-auto', scroll: 'overflow-scroll' },
+    'overflow-x': { hidden: 'overflow-x-hidden', auto: 'overflow-x-auto' },
+    'overflow-y': { hidden: 'overflow-y-hidden', auto: 'overflow-y-auto' },
     margin: { '0px': 'm-0', 0: 'm-0' },
     'text-align': { left: 'text-left', center: 'text-center', right: 'text-right', justify: 'text-justify', start: 'text-start', end: 'text-end' },
     'text-transform': { uppercase: 'uppercase', lowercase: 'lowercase', capitalize: 'capitalize' },

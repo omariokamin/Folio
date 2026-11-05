@@ -1120,6 +1120,7 @@ window.Folio = window.Folio || {};
       else if (type === 'frame' && (LAYOUT_KEYS.includes(k) || own(LAYOUT_ALIASES, k))) hoisted.layout[k] = val;
       else if (type === 'image' && (IMAGE_KEYS.includes(k) || k === 'url' || k === 'alt')) hoisted.image[k] = val;
       else if (k === 'w' || k === 'h') src[k === 'w' ? 'width' : 'height'] = val;
+      else if (k === 'interactions' || k === 'scroll') ctx.warn(`${q(k)} ignored here: use set_interactions to make layers clickable or scroll`);
       else unknown.push(k);
     });
     if (unknown.length) ctx.warn(`unknown field${unknown.length > 1 ? 's' : ''} ${unknown.map((k) => q(k)).join(', ')} ignored`);
@@ -1523,6 +1524,9 @@ window.Folio = window.Folio || {};
       }
       if (n.visible === false) o.visible = false;
       if (n.locked) o.locked = true;
+      const flow = flowOf(n);
+      if (flow.length) o.interactions = flow;
+      if (n.scroll) o.scroll = n.scroll;
       if (n.type === 'frame' && n.children && n.children.length) {
         if (d >= maxDepth || count >= maxNodes || folded) o.childCount = n.children.length;
         else {
@@ -1549,7 +1553,8 @@ window.Folio = window.Folio || {};
     if (!n) return `no layer with id ${id}`;
     const rs = renderedSize(id) || [Math.round(n.width), Math.round(n.height)];
     const p = store.getParent(id);
-    return `${n.type} ${q(n.name)} (${n.id}) ${rs[0]}×${rs[1]} ${p ? 'in ' + q(p.name) : 'artboard'}`;
+    const flow = flowOf(n).concat(n.scroll ? [`scroll: ${n.scroll}`] : []);
+    return `${n.type} ${q(n.name)} (${n.id}) ${rs[0]}×${rs[1]} ${p ? 'in ' + q(p.name) : 'artboard'}${flow.length ? ' [' + flow.join(', ') + ']' : ''}`;
   }
 
   // ---------- finding nodes ----------
@@ -1768,6 +1773,7 @@ window.Folio = window.Folio || {};
       const ids = p.roots.filter((id) => store.get(id));
       const o = { id: p.id, name: p.name };
       if (isCurrent(p)) o.current = true;
+      if (ids.length) o.start = startLine(p);
       if (o.current && !full) o.artboards = ids.length;
       else {
         o.artboards = ids.slice(0, 20).map(boardLine);
@@ -1798,7 +1804,7 @@ window.Folio = window.Folio || {};
     isCurrent(page) ? `on page ${pageTag(page)}, the one the user is viewing` : `on page ${pageTag(page)}; the view stays on ${q(S().currentPage().name)}, so new artboards still go there`;
 
   // Tools that act on (or screenshot) existing layers: the view follows them to their page.
-  const FOLLOW_TOOLS = new Set(['create_nodes', 'update_nodes', 'delete_nodes', 'move_nodes', 'screenshot', 'create_component', 'create_instances', 'update_instances', 'import_html']);
+  const FOLLOW_TOOLS = new Set(['create_nodes', 'update_nodes', 'delete_nodes', 'move_nodes', 'screenshot', 'create_component', 'create_instances', 'update_instances', 'import_html', 'set_interactions']);
   function touchedIds(inp) {
     const out = [];
     const add = (v) => typeof v === 'string' && v.trim() && out.push(v);
@@ -4088,6 +4094,89 @@ window.Folio = window.Folio || {};
     return result(text, `Exported ${q(node.name)} as ${label}`, []);
   }
 
+  // ---------- prototyping (SPEC "Prototyping (v0.11)") ----------
+  const SCROLLS = ['none', 'vertical', 'horizontal', 'both'];
+
+  /** One interaction in a few words: "→ Pricing (slide left)", "overlay → Menu", "back", "link https://…". */
+  function interactionText(it) {
+    const t = it.target ? S().get(it.target) : null;
+    const to = t ? t.name : `missing screen ${it.target}`;
+    const tr = it.transition || {};
+    const how = tr.type && tr.type !== 'instant' ? ` (${tr.type}${tr.type === 'slide' ? ' ' + (tr.direction || 'left') : ''})` : '';
+    if (it.action === 'navigate') return `→ ${to}${how}`;
+    if (it.action === 'overlay') return `overlay → ${to}${how}`;
+    if (it.action === 'url') return `link ${it.url}`;
+    return String(it.action);
+  }
+  const flowOf = (n) => (Array.isArray(n.interactions) ? n.interactions.filter(isObj).map(interactionText) : []);
+  /** The page's start screen: page.start when it is still one of its artboards, else the first artboard. */
+  function startLine(page) {
+    const store = S();
+    const ids = page.roots.filter((id) => store.get(id));
+    const id = ids.includes(page.start) ? page.start : ids[0];
+    return id ? `${id} ${q(store.get(id).name)}${id === page.start ? '' : ' (the first artboard)'}` : null;
+  }
+
+  function setInteractions(input) {
+    const store = S();
+    const P = Folio.prototype;
+    if (!P || typeof P.normalize !== 'function') return fail('Prototyping is not available in this build of Folio (src/prototype.js is not loaded).', 'Prototyping unavailable');
+    const notes = [];
+    const r = resolve(input.node_id != null ? input.node_id : input.id, notes);
+    if (r.error) return fail(r.error, 'Layer not found');
+    const node = r.node;
+    const has = (k) => input[k] !== undefined && input[k] !== null;
+    if (!has('interactions') && !has('scroll') && !has('start')) return fail('set_interactions needs "interactions" (a list; [] clears them), "scroll" (frames) or "start": true (artboards).', 'Nothing to set');
+    const sc = instanceScope(node.id);
+    const main = node.sourceId ? ` (${node.sourceId})` : '';
+    const page = pagesOn() ? store.pageOf(node.id) : null;
+    const patch = {};
+    const warnings = notes;
+    // validate everything first, so a refused part changes nothing
+    if (has('scroll')) {
+      const s = String(input.scroll).trim().toLowerCase();
+      if (!SCROLLS.includes(s)) return fail(`scroll must be one of ${SCROLLS.join(', ')} (got ${str(input.scroll)}). Nothing was changed.`, 'Bad scroll');
+      if (node.type !== 'frame') return fail(`${describeNode(node.id)} is a ${node.type}; only frames scroll. Put the content in a fixed-height frame and set scroll on that frame. Nothing was changed.`, 'Only frames scroll');
+      if (sc) return fail(`${describeNode(node.id)} is part of an instance, so scrolling follows its main component${main}; set it there. Nothing was changed.`, 'Cannot scroll an instance');
+      patch.scroll = s === 'none' ? undefined : s;
+    }
+    if (has('start') && (node.parent || !page)) return fail(`start only applies to artboards; ${describeNode(node.id)} is inside artboard ${store.rootOf(node.id)}. Nothing was changed.`, 'Not an artboard');
+    if (has('interactions')) {
+      if (sc && !sc.root) return fail(`${describeNode(node.id)} is inside an instance, so its clicks follow the main component${main}. Wire the layer in the main (every instance gets it) or wire the instance itself. Nothing was changed.`, 'Cannot wire inside an instance');
+      const raw = isObj(input.interactions) ? [input.interactions] : input.interactions;
+      if (!Array.isArray(raw)) return fail('interactions must be a list ([] clears them). Nothing was changed.', 'Bad interactions');
+      const boards = page ? page.roots.map((id) => store.get(id)).filter(Boolean) : [];
+      const list = raw.slice(0, 50).map((it) => {
+        if (!isObj(it) || typeof it.target !== 'string' || store.get(it.target)) return it;
+        const b = boards.find((x) => String(x.name).toLowerCase() === it.target.trim().toLowerCase());
+        if (b) notes.push(`target ${q(it.target)} is an artboard name, not an id — used ${b.id}`);
+        return b ? Object.assign({}, it, { target: b.id }) : it;
+      });
+      const res = P.normalize(node.id, list);
+      warnings.push(...res.warnings);
+      if (boards.length && list.some((it) => isObj(it) && (it.action === 'navigate' || it.action === 'overlay') && !boards.some((b) => b.id === it.target)))
+        warnings.push(`Artboards on this page: ${boards.slice(0, 20).map((b) => boardLine(b.id)).join('; ')}.`);
+      if (list.length && !res.interactions.length) return fail(`No valid interaction, so nothing was changed. ${warnings.join(' ')}`, 'No valid interaction');
+      patch.interactions = res.interactions.length ? res.interactions : undefined;
+    }
+    if (Object.keys(patch).length) store.update(node.id, patch);
+    if (has('start')) {
+      if (bool(input.start)) page.start = node.id;
+      else if (page.start === node.id) delete page.start;
+      store.emit('change');
+    }
+    afterMutation([node.id]);
+    const n = store.get(node.id);
+    const out = { node: `${n.id} ${q(n.name)}`, interactions: n.interactions || [] };
+    if (n.scroll) out.scroll = n.scroll;
+    if (has('start')) out.start = startLine(page);
+    if (warnings.length) out.warnings = warnings;
+    const bits = flowOf(n);
+    if (n.scroll) bits.push(`scrolls ${n.scroll}`);
+    if (page && page.start === n.id) bits.push('start screen');
+    return result(out, clip(`${q(n.name)}: ${bits.join(', ') || 'no interactions'}`, 90), [n.id]);
+  }
+
   const HANDLERS = {
     get_document: getDocument,
     get_tree: getTree,
@@ -4109,6 +4198,7 @@ window.Folio = window.Folio || {};
     import_html: importHtml,
     import_url: importUrl,
     export_code: exportCode,
+    set_interactions: setInteractions,
   };
 
   async function execute(name, input) {

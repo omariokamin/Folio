@@ -5,7 +5,7 @@
  * with exactly these CSS properties, and the code exporter prints the very same
  * properties. What you see on the canvas IS the code.
  *
- *   Folio.css.nodeStyles(node, { mode: 'canvas' | 'export' })  -> { 'css-prop': 'value', ... }
+ *   Folio.css.nodeStyles(node, { mode: 'canvas' | 'export' | 'play' })  -> { 'css-prop': 'value', ... }
  *   Folio.css.toCssText(obj)                                     -> "prop: value; prop: value;"
  *   Folio.css.toCssBlock(obj, indent)                            -> multi-line CSS declarations
  */
@@ -160,6 +160,7 @@ window.Folio = window.Folio || {};
    * The CSS properties for one node.
    * opts.mode: 'canvas' (top-level artboards are positioned on the infinite canvas)
    *            'export' (top-level artboard becomes the page container)
+   *            'play'   (the prototype player: same as export)
    * opts.parent: override the parent node (otherwise looked up in the store)
    */
   function nodeStyles(node, opts = {}) {
@@ -245,6 +246,16 @@ window.Folio = window.Folio || {};
     }
     if (st.blend && st.blend !== 'normal') out['mix-blend-mode'] = st.blend;
     if (st.clip) out.overflow = 'hidden';
+    // scroll frames (prototyping): clip on the canvas, scroll in play/export
+    const sc = node.type === 'frame' && node.scroll;
+    if (sc === 'vertical' || sc === 'horizontal' || sc === 'both') {
+      if (mode === 'canvas') out.overflow = 'hidden';
+      else {
+        delete out.overflow;
+        out['overflow-x'] = sc === 'vertical' ? 'hidden' : 'auto';
+        out['overflow-y'] = sc === 'horizontal' ? 'hidden' : 'auto';
+      }
+    }
     if (st.rotation) out.transform = `rotate(${r2(st.rotation)}deg)`;
 
     // ---- typography ----

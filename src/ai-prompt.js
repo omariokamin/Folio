@@ -375,6 +375,10 @@ When the user gives code or a URL to recreate, or wants their site or components
 
 When the user asks to build a Folio design in their project, read their stack first (package.json, Tailwind and React or not, existing components), call export_code in the matching format, then adapt names and structure to their conventions instead of pasting it as is.
 
+# Prototypes
+
+To make a design clickable, use set_interactions (create_nodes and update_nodes don't take interactions). Wire the main buttons, nav links and back buttons: navigate to another artboard on the same page (a slide feels like moving forward, a dissolve like a change of view), back, url for real links, and overlay for modals, menus and sheets (build each as its own small artboard, and give its close button "close"). For hover states, add a State=Hover variant to the button's component set. Long content in a phone screen goes in a fixed-height frame with scroll "vertical". The prototype starts on the first artboard unless you set start on another. Then tell the user to press Play (▶) to try it.
+
 # Workflow
 
 1. Look first. The user's message starts with a short description of the document and selection; call get_document for the full outline (pages and the active brand kit) and get_tree before editing something you haven't seen. Call list_components when the document has components.
@@ -785,6 +789,49 @@ ${JSON.stringify(EXAMPLE)}`;
           format: { type: 'string', enum: ['html-css', 'tailwind-html', 'tailwind-react'], description: 'Match the user\'s stack: tailwind-react for React with Tailwind, tailwind-html for Tailwind without React, html-css otherwise.' },
         },
         required: ['node_id', 'format'],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'set_interactions',
+      description:
+        'Make a design clickable for Play mode (▶) and the prototype export. interactions replaces the layer\'s click list ([] clears it): navigate (target: another artboard on the same page), back, url (http(s), mailto or tel link), overlay (target artboard shown on top: a modal, menu or sheet), close (closes the top overlay). scroll makes a frame scroll its content. start: true makes an artboard the page\'s start screen. Invalid entries are dropped with a warning; returns the stored list.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          node_id: { type: 'string', description: 'The layer to wire (a button, link, card or a whole artboard).' },
+          interactions: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                action: { type: 'string', enum: ['navigate', 'back', 'url', 'overlay', 'close'] },
+                target: { type: 'string', description: 'navigate / overlay: artboard id.' },
+                url: { type: 'string', description: 'url: the link.' },
+                transition: {
+                  type: 'object',
+                  properties: {
+                    type: { type: 'string', enum: ['instant', 'dissolve', 'slide'] },
+                    direction: { type: 'string', enum: ['left', 'right', 'up', 'down'], description: 'slide: the way the new screen moves (left = in from the right, like going forward).' },
+                    duration: { type: 'integer', minimum: 0, maximum: 2000, description: 'Milliseconds. Default 300.' },
+                  },
+                },
+                overlay: {
+                  type: 'object',
+                  properties: {
+                    position: { type: 'string', enum: ['center', 'top', 'bottom', 'left', 'right'] },
+                    closeOnOutside: { type: 'boolean', description: 'Default true.' },
+                    backdrop: { type: 'string', description: 'Backdrop colour. Default #0f172a66.' },
+                  },
+                },
+              },
+              required: ['action'],
+            },
+          },
+          scroll: { type: 'string', enum: ['none', 'vertical', 'horizontal', 'both'], description: 'Frames only: scroll content that is bigger than the frame.' },
+          start: { type: 'boolean', description: 'Artboards only: true makes it the page\'s start screen.' },
+        },
+        required: ['node_id'],
         additionalProperties: false,
       },
     },

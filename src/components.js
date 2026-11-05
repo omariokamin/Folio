@@ -27,7 +27,7 @@ window.Folio = window.Folio || {};
 (function () {
   const OVR = ['text.content', 'text.color', 'style.fills', 'style.border.color', 'image.src', 'image.fit', 'visible'];
   // `locked` is owned too, so locking an instance doesn't get undone by the next propagation
-  const ROOT_OWN = ['x', 'y', 'width', 'height', 'sizing', 'name', 'locked'];
+  const ROOT_OWN = ['x', 'y', 'width', 'height', 'sizing', 'name', 'locked', 'interactions'];
   const FILL_TYPES = ['solid', 'linear', 'radial', 'conic', 'mesh', 'image', 'noise'];
   const SET_FRAME = {
     sizing: { w: 'hug', h: 'hug' },
