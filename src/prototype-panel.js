@@ -96,7 +96,9 @@ window.Folio = window.Folio || {};
 
   function save(id, list, label) {
     const res = PR().normalize ? PR().normalize(id, list) : { interactions: list, warnings: [] };
-    store.update(id, { interactions: res.interactions.length ? res.interactions : undefined });
+    // an instance root without the key would re-inherit the main's interactions, so it keeps an explicit []
+    const empty = store.get(id).instance ? [] : undefined;
+    store.update(id, { interactions: res.interactions.length ? res.interactions : empty });
     store.commit(label);
     if (res.warnings.length) Folio.ui.toast(res.warnings[0], 'error');
   }
