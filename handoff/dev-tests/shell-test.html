@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Folio shell test harness</title>
+  <link rel="stylesheet" href="../styles/base.css" />
+  <link rel="stylesheet" href="../styles/shell.css" />
+  <style>
+    #canvas-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header id="toolbar"></header>
+    <aside id="left-panel"><div id="layers"></div></aside>
+    <main id="canvas-viewport">
+      <div id="canvas-world"></div>
+      <div id="canvas-overlay"></div>
+    </main>
+    <aside id="right-panel"><div id="inspector"></div></aside>
+    <section id="code-panel" hidden></section>
+  </div>
+  <div id="toast-root"></div>
+  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+  <script src="../src/state.js"></script>
+  <script src="../src/css.js"></script>
+  <script src="../src/fonts.js"></script>
+  <script src="../src/ui.js"></script>
+  <script src="../src/icons.js"></script>
+  <script>
+  // ---- stub render + canvas (the real ones are built by another agent) ----
+  (function () {
+    const store = Folio.store;
+    let world, vp;
+    const els = new Map();
+    function draw() {
+      world.innerHTML = ''; els.clear();
+      const mk = (id, parent) => {
+        const n = store.get(id); if (!n) return null;
+        const el = document.createElement(n.type === 'image' ? 'img' : 'div');
+        el.dataset.id = id;
+        let css = Folio.css.toCssText(Folio.css.nodeStyles(n, { mode: 'canvas', parent }));
+        if (n.visible === false) css += ' display:none;';
+        el.style.cssText = css;
+        if (n.type === 'text') { el.textContent = n.text.content; Folio.fonts.ensure(n.text.font); }
+        if (n.type === 'image') el.src = n.image.src;
+        if (n.type === 'frame') n.children.forEach((c) => { const ce = mk(c, n); ce && el.appendChild(ce); });
+        els.set(id, el);
+        return el;
+      };
+      store.doc.roots.forEach((id) => world.appendChild(mk(id, null)));
+    }
+    function applyVp() { const v = store.viewport; world.style.transform = `translate(${v.x}px, ${v.y}px) scale(${v.zoom})`; }
+    let raf = 0;
+    Folio.render = {
+      init() { world = document.getElementById('canvas-world'); vp = document.getElementById('canvas-viewport');
+        store.on('change', () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw(); }); });
+        store.on('viewport', applyVp); draw(); applyVp(); },
+      el(id) { return els.get(id) || null; },
+      rerender() { draw(); applyVp(); },
+    };
+    const rect = (id) => {
+      const e = els.get(id); if (!e) return null;
+      const r = e.getBoundingClientRect(), vr = vp.getBoundingClientRect(), v = store.viewport;
+      return { x: (r.left - vr.left - v.x) / v.zoom, y: (r.top - vr.top - v.y) / v.zoom, width: r.width / v.zoom, height: r.height / v.zoom };
+    };
+    const fitRects = (rs) => {
+      rs = rs.filter(Boolean); if (!rs.length) return;
+      const x0 = Math.min(...rs.map((r) => r.x)), y0 = Math.min(...rs.map((r) => r.y));
+      const x1 = Math.max(...rs.map((r) => r.x + r.width)), y1 = Math.max(...rs.map((r) => r.y + r.height));
+      const W = vp.clientWidth, H = vp.clientHeight, pad = 60;
+      const z = Math.min((W - pad * 2) / (x1 - x0), (H - pad * 2) / (y1 - y0), 1);
+      store.setViewport({ zoom: z, x: (W - (x1 - x0) * z) / 2 - x0 * z, y: (H - (y1 - y0) * z) / 2 - y0 * z });
+    };
+    window.__calls = [];
+    Folio.canvas = {
+      init() {},
+      nodeRect: rect,
+      zoomToFit(ids) { window.__calls.push('fit'); fitRects((ids || store.doc.roots).map(rect)); },
+      zoomToSelection() { window.__calls.push('sel'); fitRects(store.selection.map(rect)); },
+      setZoom(z) { window.__calls.push('zoom:' + z); const W = vp.clientWidth / 2, H = vp.clientHeight / 2, v = store.viewport;
+        const wx = (W - v.x) / v.zoom, wy = (H - v.y) / v.zoom; store.setViewport({ zoom: z, x: W - wx * z, y: H - wy * z }); },
+      zoomIn() { this.setZoom(store.viewport.zoom * 1.25); },
+      zoomOut() { this.setZoom(store.viewport.zoom / 1.25); },
+      startTextEdit(id) { window.__calls.push('edit:' + id); },
+      createArtboard(p) { window.__calls.push('artboard:' + p.name);
+        const n = store.createNode('frame', { name: p.name, x: 5000, y: 0, width: p.width, height: p.height, style: { clip: true } });
+        store.select(n.id); return n; },
+    };
+  })();
+  </script>
+  <script src="../src/layers.js"></script>
+  <script src="../src/toolbar.js"></script>
+  <script src="../src/export.js"></script>
+  <script src="../src/shortcuts.js"></script>
+  <script src="../src/demo.js"></script>
+  <script src="../src/main.js"></script>
+</body>
+</html>

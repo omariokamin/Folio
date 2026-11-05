@@ -1,0 +1,72 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>canvas test</title>
+<link rel="stylesheet" href="../styles/base.css">
+<link rel="stylesheet" href="../styles/canvas.css">
+<style>
+  #app { grid-template-columns: 0 1fr 0; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="toolbar"></header>
+  <aside id="left-panel"><div id="layers"></div></aside>
+  <main id="canvas-viewport">
+    <div id="canvas-world"></div>
+    <div id="canvas-overlay"></div>
+  </main>
+  <aside id="right-panel"><div id="inspector"></div></aside>
+  <section id="code-panel" hidden></section>
+</div>
+<div id="toast-root"></div>
+<script src="../src/state.js"></script>
+<script src="../src/css.js"></script>
+<script src="../src/fonts.js"></script>
+<script src="../src/ui.js"></script>
+<script src="../src/icons.js"></script>
+<script src="../src/render.js"></script>
+<script src="../src/overlay.js"></script>
+<script src="../src/canvas.js"></script>
+<script>
+  // fonts may be blocked in the sandbox; make ensure() a no-op to avoid noise
+  Folio.fonts.ensure = function () {};
+  const S = Folio.store;
+  const fill = (c) => ({ fills: [{ type: 'solid', color: c, visible: true }] });
+  const free = S.buildFromTree({
+    id: 'free', name: 'Freeform', x: 0, y: 0, width: 600, height: 400, style: { ...fill('#ffffff'), clip: true },
+    children: [
+      { id: 'rect1', name: 'Rect 1', x: 40, y: 40, width: 120, height: 80, style: fill('#ff8a65') },
+      { id: 'card', name: 'Card', x: 220, y: 60, width: 300, height: 220, style: { ...fill('#e3f2fd'), radius: 12 },
+        children: [
+          { id: 'cardTitle', type: 'text', name: 'Card title', x: 20, y: 20, text: { content: 'Card title', size: 20, weight: 600 } },
+          { id: 'cardBox', name: 'Card box', x: 20, y: 80, width: 100, height: 100, style: fill('#90caf9') },
+        ] },
+      { id: 'hello', type: 'text', name: 'Hello', x: 40, y: 300, text: { content: 'Hello world', size: 24 } },
+    ],
+  });
+  const flex = S.buildFromTree({
+    id: 'flex', name: 'Flex board', x: 700, y: 0, width: 400, height: 500, style: fill('#ffffff'),
+    layout: { mode: 'flex', direction: 'column', gap: 12, padding: [24, 24, 24, 24] },
+    children: [
+      { id: 'f1', name: 'Item A', width: 200, height: 60, style: fill('#a5d6a7') },
+      { id: 'f2', name: 'Item B', width: 200, height: 60, style: fill('#ffcc80') },
+      { id: 'f3', name: 'Item C', width: 200, height: 60, style: fill('#ce93d8') },
+      { id: 'row', name: 'Row', sizing: { w: 'fill', h: 'hug' }, height: 50, style: fill('#eeeeee'),
+        layout: { mode: 'flex', direction: 'row', gap: 8, padding: [8, 8, 8, 8] },
+        children: [
+          { id: 'r1', name: 'R1', width: 50, height: 40, style: fill('#ef9a9a') },
+          { id: 'r2', name: 'R2', width: 50, height: 40, style: fill('#80cbc4') },
+          { id: 'r3', type: 'text', name: 'R3', text: { content: 'Label' } },
+        ] },
+    ],
+  });
+  S.commit('init');
+  Folio.render.init();
+  Folio.canvas.init();
+  window.__errors = [];
+  window.addEventListener('error', (e) => window.__errors.push(String(e.message)));
+</script>
+</body>
+</html>

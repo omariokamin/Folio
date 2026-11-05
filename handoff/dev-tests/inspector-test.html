@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Inspector harness</title>
+  <link rel="stylesheet" href="../styles/base.css" />
+  <link rel="stylesheet" href="../styles/inspector.css" />
+  <style>
+    #app { grid-template-columns: 1fr var(--right-w); grid-template-areas: 'toolbar toolbar' 'canvas right' 'canvas right'; }
+    #toolbar { display: flex; gap: 6px; align-items: center; padding: 0 10px; }
+    #canvas-viewport { overflow: auto; }
+    #canvas-world { position: relative; transform-origin: 0 0; transform: scale(.35) translate(40px, 40px); }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header id="toolbar"></header>
+    <main id="canvas-viewport"><div id="canvas-world"></div></main>
+    <aside id="right-panel"><div id="inspector"></div></aside>
+  </div>
+  <div id="toast-root"></div>
+  <script src="../src/state.js"></script>
+  <script src="../src/css.js"></script>
+  <script src="../src/fonts.js"></script>
+  <script src="../src/ui.js"></script>
+  <script src="../src/icons.js"></script>
+  <script>
+    // --- stub renderer: draws the doc with Folio.css.nodeStyles so edits are visible ---
+    (function () {
+      const els = {};
+      function draw(id, parentEl) {
+        const n = Folio.store.get(id);
+        if (!n || n.visible === false) return;
+        const el = document.createElement(n.type === 'image' ? 'img' : 'div');
+        el.dataset.id = id;
+        el.style.cssText = Folio.css.toCssText(Folio.css.nodeStyles(n, { mode: 'canvas' }));
+        if (n.type === 'text') el.textContent = n.text.content;
+        if (n.type === 'image') el.src = n.image.src || 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
+        if (Folio.store.selection.includes(id)) el.style.outline = '3px solid #6d5efc';
+        parentEl.appendChild(el);
+        els[id] = el;
+        n.children.forEach((c) => draw(c, el));
+      }
+      function rerender() {
+        const w = document.getElementById('canvas-world');
+        w.innerHTML = '';
+        Object.keys(els).forEach((k) => delete els[k]);
+        Folio.store.doc.roots.forEach((r) => draw(r, w));
+      }
+      Folio.render = { init() {}, el: (id) => els[id] || null, rerender };
+      Folio.store.on('change', rerender);
+      Folio.store.on('selection', rerender);
+    })();
+  </script>
+  <script src="../src/inspector.js"></script>
+  <script>
+    const s = Folio.store;
+    s.load(null);
+    const ab = s.buildFromTree({
+      type: 'frame', name: 'Post', x: 0, y: 0, width: 1080, height: 1080,
+      style: { fills: [{ type: 'linear', angle: 135, stops: [{ color: '#6d5efc', pos: 0 }, { color: '#f2555a', pos: 100 }] }] },
+      children: [
+        { type: 'text', name: 'Title', x: 80, y: 80, text: { content: 'Hello Folio', size: 96, weight: 700, color: '#ffffff' } },
+        { type: 'frame', name: 'Card', x: 80, y: 400, width: 600, height: 300, style: { radius: 24, fills: [{ type: 'solid', color: '#ffffffcc' }] },
+          children: [
+            { type: 'frame', name: 'A', x: 40, y: 40, width: 120, height: 80, style: { fills: [{ type: 'solid', color: '#22d3ee' }] } },
+            { type: 'frame', name: 'B', x: 200, y: 50, width: 120, height: 80, style: { fills: [{ type: 'solid', color: '#a855f7' }] } },
+            { type: 'frame', name: 'C', x: 360, y: 40, width: 120, height: 80, style: { fills: [{ type: 'solid', color: '#10b981' }] } },
+          ] },
+        { type: 'image', name: 'Photo', x: 700, y: 700, width: 300, height: 300 },
+      ],
+    });
+    s.commit('init');
+    Folio.render.rerender();
+    Folio.inspector.init();
+    const tb = document.getElementById('toolbar');
+    const btn = (l, f) => { const b = Folio.ui.h('button', { class: 'f-btn', onclick: f }, l); tb.appendChild(b); };
+    btn('None', () => s.select([]));
+    btn('Artboard', () => s.select(ab.id));
+    ab.children.forEach((id) => btn(s.get(id).name, () => s.select(id)));
+    btn('Undo', () => s.undo());
+    btn('Redo', () => s.redo());
+    window.T = { ab: ab.id, title: ab.children[0], card: ab.children[1], photo: ab.children[2] };
+  </script>
+</body>
+</html>

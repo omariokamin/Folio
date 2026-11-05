@@ -1,0 +1,20 @@
+const { chromium } = require('playwright');
+const OUT = '/home/user/folio/.dev';
+(async () => {
+  const browser = await chromium.launch();
+  const page = await (await browser.newContext({ viewport: { width: 1400, height: 700 }, deviceScaleFactor: 1 })).newPage();
+  page.on('pageerror', (e) => console.log('pageerror', e.message));
+  await page.route(/^https?:\/\/(?!localhost)/, (r) => r.abort());
+  await page.goto('http://localhost:8121/index.html');
+  await page.evaluate(() => localStorage.clear()); await page.reload();
+  await page.waitForFunction(() => document.documentElement.classList.contains('folio-ready'));
+  await page.click('.bp-tab:has-text("Brand")');
+  await page.click('.bp-tpl >> nth=3');
+  await page.waitForTimeout(2900);
+  await page.screenshot({ path: OUT + '/shot3-colors.png', clip: { x: 0, y: 40, width: 260, height: 480 } });
+  await page.click('.bp-tab:has-text("Layers")');
+  await page.evaluate(() => (document.getElementById('left-panel').scrollTop = 300));
+  await page.waitForTimeout(100);
+  await page.screenshot({ path: OUT + '/shot3-layers.png', clip: { x: 0, y: 0, width: 260, height: 400 } });
+  await browser.close();
+})();

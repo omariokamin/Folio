@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Glass test</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;display=swap">
+  <style>
+/* Exported from Folio — every layer is plain HTML + CSS */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  min-height: 100vh;
+  display: flex;
+  background: #e9e9ec;
+  -webkit-font-smoothing: antialiased;
+}
+/* the artboard: centered when it fits, scrollable when it doesn't */
+body > :first-child { margin: auto; flex-shrink: 0; }
+h1, h2, h3, p { margin: 0; }
+img { display: block; max-width: none; }
+
+.glass-test {
+  box-sizing: border-box;
+  position: relative;
+  width: 860px;
+  height: 540px;
+  background-image: url("data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27200%27%20height%3D%27200%27%3E%3Cfilter%20id%3D%27n%27%3E%3CfeTurbulence%20type%3D%27fractalNoise%27%20baseFrequency%3D%270.8%27%20numOctaves%3D%273%27%20stitchTiles%3D%27stitch%27%2F%3E%3CfeColorMatrix%20type%3D%27saturate%27%20values%3D%270%27%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%27100%25%27%20height%3D%27100%25%27%20filter%3D%27url%28%23n%29%27%20opacity%3D%270.12%27%2F%3E%3C%2Fsvg%3E"), radial-gradient(at 12% 18%, #ff5b1f 0px, transparent 52%), radial-gradient(at 88% 12%, #ffb12e 0px, transparent 52%), radial-gradient(at 82% 88%, #a3121d 0px, transparent 52%), radial-gradient(at 18% 82%, #ff8a4c 0px, transparent 52%), linear-gradient(#170705, #170705), linear-gradient(#222222, #222222);
+  background-size: 200px 200px, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%;
+  background-position: 0 0, center, center, center, center, center, center;
+  background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
+}
+
+.card-a {
+  box-sizing: border-box;
+  position: absolute;
+  left: 60px;
+  top: 140px;
+  width: 340px;
+  height: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 28px;
+  background-image: linear-gradient(160deg, #ffffff47 0%, #ffffff14 100%);
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 24px;
+  border: 1px solid #ffffff59;
+  box-shadow: inset 0px 1px 0px 0px #ffffff80, inset 0px -1px 0px 0px #ffffff1a, 0px 8px 32px -8px #0f172a2e;
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+}
+
+.eyebrow {
+  box-sizing: border-box;
+  position: relative;
+  flex-shrink: 0;
+  width: max-content;
+  height: auto;
+  margin: 0px;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.12em;
+  color: #ffffffcc;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.title {
+  box-sizing: border-box;
+  position: relative;
+  flex-shrink: 0;
+  align-self: stretch;
+  width: auto;
+  height: auto;
+  margin: 0px;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #ffffff;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.body {
+  box-sizing: border-box;
+  position: relative;
+  flex-shrink: 0;
+  align-self: stretch;
+  width: auto;
+  height: auto;
+  margin: 0px;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.45;
+  color: #ffffffd9;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.card-b {
+  box-sizing: border-box;
+  position: absolute;
+  left: 460px;
+  top: 140px;
+  width: 340px;
+  height: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 28px;
+  background-image: linear-gradient(160deg, #ffffff47 0%, #ffffff14 100%);
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 24px;
+  border: 1px solid #ffffff59;
+  box-shadow: inset 0px 1px 0px 0px #ffffff80, inset 0px -1px 0px 0px #ffffff1a, 0px 8px 32px -8px #0f172a2e;
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+}
+
+.eyebrow-2 {
+  box-sizing: border-box;
+  position: relative;
+  flex-shrink: 0;
+  width: max-content;
+  height: auto;
+  margin: 0px;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.12em;
+  color: #ffffffcc;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.title-2 {
+  box-sizing: border-box;
+  position: relative;
+  flex-shrink: 0;
+  align-self: stretch;
+  width: auto;
+  height: auto;
+  margin: 0px;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #ffffff;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.body-2 {
+  box-sizing: border-box;
+  position: relative;
+  flex-shrink: 0;
+  align-self: stretch;
+  width: auto;
+  height: auto;
+  margin: 0px;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.45;
+  color: #ffffffd9;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+  </style>
+</head>
+<body>
+  <div class="glass-test">
+    <div class="card-a">
+      <p class="eyebrow">MEMBERSHIP</p>
+      <h2 class="title">Studio Pass</h2>
+      <p class="body">Unlimited classes, guest passes and early booking for every season.</p>
+    </div>
+    <div class="card-b">
+      <p class="eyebrow-2">MEMBERSHIP</p>
+      <h2 class="title-2">Studio Pass</h2>
+      <p class="body-2">Unlimited classes, guest passes and early booking for every season.</p>
+    </div>
+  </div>
+</body>
+</html>

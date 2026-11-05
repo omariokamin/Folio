@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Brand Test</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:wght@100..900&amp;display=swap">
+  <style>
+/* Exported from Folio — every layer is plain HTML + CSS */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  min-height: 100vh;
+  display: flex;
+  background: #e9e9ec;
+  -webkit-font-smoothing: antialiased;
+}
+/* the artboard: centered when it fits, scrollable when it doesn't */
+body > :first-child { margin: auto; flex-shrink: 0; }
+h1, h2, h3, p { margin: 0; }
+img { display: block; max-width: none; }
+
+:root {
+  --color-primary: #16a34a;
+  --color-secondary: #1e3a8a;
+  --color-accent: #f59e0b;
+  --color-background: #fff7ed;
+  --color-text: #1c1917;
+  --color-muted: #78716c;
+  --font-heading: "Fraunces", Georgia, serif;
+  --radius-md: 12px;
+}
+
+.brand-test {
+  box-sizing: border-box;
+  position: relative;
+  width: 600px;
+  height: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 32px;
+  background-color: var(--color-background);
+}
+
+.headline {
+  box-sizing: border-box;
+  position: relative;
+  flex-shrink: 0;
+  align-self: stretch;
+  width: auto;
+  height: auto;
+  margin: 0px;
+  font-family: var(--font-heading);
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.card {
+  box-sizing: border-box;
+  position: relative;
+  flex-shrink: 0;
+  width: 300px;
+  height: 80px;
+  background-color: var(--color-primary);
+  border-radius: var(--radius-md);
+  border: 4px solid var(--color-muted);
+  box-shadow: 0px 8px 0px 0px var(--color-text);
+}
+
+.gradient {
+  box-sizing: border-box;
+  position: relative;
+  flex-shrink: 0;
+  width: 300px;
+  height: 40px;
+  background-image: linear-gradient(90deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.row {
+  box-sizing: border-box;
+  position: relative;
+  flex-shrink: 0;
+  width: fit-content;
+  height: auto;
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.logo {
+  box-sizing: border-box;
+  position: relative;
+  flex-shrink: 0;
+  width: 120px;
+  height: 40px;
+  display: block;
+  object-fit: contain;
+}
+
+.logo-fill {
+  box-sizing: border-box;
+  position: relative;
+  flex-shrink: 0;
+  width: 120px;
+  height: 40px;
+  background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAiIGhlaWdodD0iNDAiPjxyZWN0IHdpZHRoPSIxMjAiIGhlaWdodD0iNDAiIGZpbGw9IiMxZDRlZDgiLz48L3N2Zz4=");
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.mesh {
+  box-sizing: border-box;
+  position: relative;
+  flex-shrink: 0;
+  width: 120px;
+  height: 40px;
+  background-image: radial-gradient(at 10% 10%, var(--color-primary) 0px, transparent 60%), radial-gradient(at 90% 10%, var(--color-secondary) 0px, transparent 60%), radial-gradient(at 90% 90%, var(--color-accent) 0px, transparent 60%), radial-gradient(at 10% 90%, #10b981 0px, transparent 60%), linear-gradient(#ffffff, #ffffff);
+  background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%;
+  background-position: center, center, center, center, center;
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
+}
+  </style>
+</head>
+<body>
+  <div class="brand-test">
+    <h1 class="headline">Fresh bread daily</h1>
+    <div class="card"></div>
+    <div class="gradient"></div>
+    <div class="row">
+      <img class="logo" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAiIGhlaWdodD0iNDAiPjxyZWN0IHdpZHRoPSIxMjAiIGhlaWdodD0iNDAiIGZpbGw9IiMxZDRlZDgiLz48L3N2Zz4=" alt="Logo">
+      <div class="logo-fill"></div>
+      <div class="mesh"></div>
+    </div>
+  </div>
+</body>
+</html>

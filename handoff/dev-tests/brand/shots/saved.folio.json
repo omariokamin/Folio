@@ -1,0 +1,642 @@
+{
+  "version": 1,
+  "name": "Folio demo",
+  "nodes": {
+    "n_ndnp5ti": {
+      "id": "n_ndnp5ti",
+      "type": "frame",
+      "name": "Brand Test",
+      "parent": null,
+      "children": [
+        "n_tpqdddq",
+        "n_qtehpbm",
+        "n_czgw8b3",
+        "n_cdyg2y0"
+      ],
+      "x": 0,
+      "y": 0,
+      "width": 600,
+      "height": 420,
+      "sizing": {
+        "w": "fixed",
+        "h": "fixed"
+      },
+      "visible": true,
+      "locked": false,
+      "style": {
+        "fills": [
+          {
+            "type": "solid",
+            "color": "var(--color-background)"
+          }
+        ],
+        "radius": 0,
+        "border": {
+          "width": 0,
+          "color": "#000000",
+          "style": "solid"
+        },
+        "shadows": [],
+        "opacity": 1,
+        "blur": 0,
+        "backdropBlur": 0,
+        "backdropSaturate": 100,
+        "blend": "normal",
+        "clip": false,
+        "rotation": 0
+      },
+      "layout": {
+        "mode": "flex",
+        "direction": "column",
+        "wrap": false,
+        "gap": 16,
+        "justify": "flex-start",
+        "align": "flex-start",
+        "padding": [
+          32,
+          32,
+          32,
+          32
+        ]
+      }
+    },
+    "n_tpqdddq": {
+      "id": "n_tpqdddq",
+      "type": "text",
+      "name": "Headline",
+      "parent": "n_ndnp5ti",
+      "children": [],
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 24,
+      "sizing": {
+        "w": "fill",
+        "h": "hug"
+      },
+      "visible": true,
+      "locked": false,
+      "style": {
+        "fills": [],
+        "radius": 0,
+        "border": {
+          "width": 0,
+          "color": "#000000",
+          "style": "solid"
+        },
+        "shadows": [],
+        "opacity": 1,
+        "blur": 0,
+        "backdropBlur": 0,
+        "backdropSaturate": 100,
+        "blend": "normal",
+        "clip": false,
+        "rotation": 0
+      },
+      "text": {
+        "content": "Fresh bread daily",
+        "font": "var(--font-heading)",
+        "size": 40,
+        "weight": 700,
+        "lineHeight": 1.4,
+        "letterSpacing": 0,
+        "color": "var(--color-text)",
+        "align": "left",
+        "transform": "none",
+        "italic": false,
+        "decoration": "none"
+      }
+    },
+    "n_qtehpbm": {
+      "id": "n_qtehpbm",
+      "type": "frame",
+      "name": "Card",
+      "parent": "n_ndnp5ti",
+      "children": [],
+      "x": 0,
+      "y": 0,
+      "width": 300,
+      "height": 80,
+      "sizing": {
+        "w": "fixed",
+        "h": "fixed"
+      },
+      "visible": true,
+      "locked": false,
+      "style": {
+        "fills": [
+          {
+            "type": "solid",
+            "color": "var(--color-primary)",
+            "visible": true
+          }
+        ],
+        "radius": "var(--radius-md)",
+        "border": {
+          "width": 4,
+          "color": "var(--color-muted)",
+          "style": "solid"
+        },
+        "shadows": [
+          {
+            "x": 0,
+            "y": 8,
+            "blur": 0,
+            "spread": 0,
+            "color": "var(--color-text)",
+            "visible": true
+          }
+        ],
+        "opacity": 1,
+        "blur": 0,
+        "backdropBlur": 0,
+        "backdropSaturate": 100,
+        "blend": "normal",
+        "clip": false,
+        "rotation": 0
+      },
+      "layout": {
+        "mode": "none",
+        "direction": "column",
+        "wrap": false,
+        "gap": 0,
+        "justify": "flex-start",
+        "align": "flex-start",
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "n_czgw8b3": {
+      "id": "n_czgw8b3",
+      "type": "frame",
+      "name": "Gradient",
+      "parent": "n_ndnp5ti",
+      "children": [],
+      "x": 0,
+      "y": 0,
+      "width": 300,
+      "height": 40,
+      "sizing": {
+        "w": "fixed",
+        "h": "fixed"
+      },
+      "visible": true,
+      "locked": false,
+      "style": {
+        "fills": [
+          {
+            "type": "linear",
+            "angle": 90,
+            "stops": [
+              {
+                "color": "var(--color-primary)",
+                "pos": 0
+              },
+              {
+                "color": "var(--color-secondary)",
+                "pos": 100
+              }
+            ]
+          }
+        ],
+        "radius": 0,
+        "border": {
+          "width": 0,
+          "color": "#000000",
+          "style": "solid"
+        },
+        "shadows": [],
+        "opacity": 1,
+        "blur": 0,
+        "backdropBlur": 0,
+        "backdropSaturate": 100,
+        "blend": "normal",
+        "clip": false,
+        "rotation": 0
+      },
+      "layout": {
+        "mode": "none",
+        "direction": "column",
+        "wrap": false,
+        "gap": 0,
+        "justify": "flex-start",
+        "align": "flex-start",
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "n_cdyg2y0": {
+      "id": "n_cdyg2y0",
+      "type": "frame",
+      "name": "Row",
+      "parent": "n_ndnp5ti",
+      "children": [
+        "n_kviwp49",
+        "n_b0drthk",
+        "n_v6hwarx"
+      ],
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 200,
+      "sizing": {
+        "w": "hug",
+        "h": "hug"
+      },
+      "visible": true,
+      "locked": false,
+      "style": {
+        "fills": [],
+        "radius": 0,
+        "border": {
+          "width": 0,
+          "color": "#000000",
+          "style": "solid"
+        },
+        "shadows": [],
+        "opacity": 1,
+        "blur": 0,
+        "backdropBlur": 0,
+        "backdropSaturate": 100,
+        "blend": "normal",
+        "clip": false,
+        "rotation": 0
+      },
+      "layout": {
+        "mode": "flex",
+        "direction": "row",
+        "wrap": false,
+        "gap": 16,
+        "justify": "flex-start",
+        "align": "flex-start",
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "n_kviwp49": {
+      "id": "n_kviwp49",
+      "type": "image",
+      "name": "Logo",
+      "parent": "n_cdyg2y0",
+      "children": [],
+      "x": 0,
+      "y": 0,
+      "width": 120,
+      "height": 40,
+      "sizing": {
+        "w": "fixed",
+        "h": "fixed"
+      },
+      "visible": true,
+      "locked": false,
+      "style": {
+        "fills": [],
+        "radius": 0,
+        "border": {
+          "width": 0,
+          "color": "#000000",
+          "style": "solid"
+        },
+        "shadows": [],
+        "opacity": 1,
+        "blur": 0,
+        "backdropBlur": 0,
+        "backdropSaturate": 100,
+        "blend": "normal",
+        "clip": false,
+        "rotation": 0
+      },
+      "image": {
+        "src": "brand-logo:l_ab12",
+        "fit": "contain"
+      }
+    },
+    "n_b0drthk": {
+      "id": "n_b0drthk",
+      "type": "frame",
+      "name": "Logo Fill",
+      "parent": "n_cdyg2y0",
+      "children": [],
+      "x": 0,
+      "y": 0,
+      "width": 120,
+      "height": 40,
+      "sizing": {
+        "w": "fixed",
+        "h": "fixed"
+      },
+      "visible": true,
+      "locked": false,
+      "style": {
+        "fills": [
+          {
+            "type": "image",
+            "src": "brand-logo:l_ab12",
+            "fit": "contain"
+          }
+        ],
+        "radius": 0,
+        "border": {
+          "width": 0,
+          "color": "#000000",
+          "style": "solid"
+        },
+        "shadows": [],
+        "opacity": 1,
+        "blur": 0,
+        "backdropBlur": 0,
+        "backdropSaturate": 100,
+        "blend": "normal",
+        "clip": false,
+        "rotation": 0
+      },
+      "layout": {
+        "mode": "none",
+        "direction": "column",
+        "wrap": false,
+        "gap": 0,
+        "justify": "flex-start",
+        "align": "flex-start",
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "n_v6hwarx": {
+      "id": "n_v6hwarx",
+      "type": "frame",
+      "name": "Mesh",
+      "parent": "n_cdyg2y0",
+      "children": [],
+      "x": 0,
+      "y": 0,
+      "width": 120,
+      "height": 40,
+      "sizing": {
+        "w": "fixed",
+        "h": "fixed"
+      },
+      "visible": true,
+      "locked": false,
+      "style": {
+        "fills": [
+          {
+            "type": "mesh",
+            "base": "#ffffff",
+            "spread": 60,
+            "points": [
+              {
+                "color": "var(--color-primary)",
+                "x": 10,
+                "y": 10
+              },
+              {
+                "color": "var(--color-secondary)",
+                "x": 90,
+                "y": 10
+              },
+              {
+                "color": "var(--color-accent)",
+                "x": 90,
+                "y": 90
+              },
+              {
+                "color": "#10b981",
+                "x": 10,
+                "y": 90
+              }
+            ]
+          }
+        ],
+        "radius": 0,
+        "border": {
+          "width": 0,
+          "color": "#000000",
+          "style": "solid"
+        },
+        "shadows": [],
+        "opacity": 1,
+        "blur": 0,
+        "backdropBlur": 0,
+        "backdropSaturate": 100,
+        "blend": "normal",
+        "clip": false,
+        "rotation": 0
+      },
+      "layout": {
+        "mode": "none",
+        "direction": "column",
+        "wrap": false,
+        "gap": 0,
+        "justify": "flex-start",
+        "align": "flex-start",
+        "padding": [
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    }
+  },
+  "pages": [
+    {
+      "id": "p_06xu7w",
+      "name": "Page 1",
+      "roots": [
+        "n_ndnp5ti"
+      ]
+    }
+  ],
+  "brand": {
+    "id": "b_yaqco2",
+    "name": "Crumb Bakery",
+    "updatedAt": 1793820862894,
+    "colors": [
+      {
+        "id": "primary",
+        "name": "Primary",
+        "value": "#16a34a",
+        "core": true
+      },
+      {
+        "id": "on-primary",
+        "name": "On primary",
+        "value": "#ffffff",
+        "core": true
+      },
+      {
+        "id": "secondary",
+        "name": "Secondary",
+        "value": "#1e3a8a",
+        "core": true
+      },
+      {
+        "id": "accent",
+        "name": "Accent",
+        "value": "#f59e0b",
+        "core": true
+      },
+      {
+        "id": "background",
+        "name": "Background",
+        "value": "#fff7ed",
+        "core": true
+      },
+      {
+        "id": "surface",
+        "name": "Surface",
+        "value": "#ffffff",
+        "core": true
+      },
+      {
+        "id": "text",
+        "name": "Text",
+        "value": "#1c1917",
+        "core": true
+      },
+      {
+        "id": "muted",
+        "name": "Muted",
+        "value": "#78716c",
+        "core": true
+      },
+      {
+        "id": "success",
+        "name": "Success",
+        "value": "#16a34a",
+        "core": true
+      },
+      {
+        "id": "danger",
+        "name": "Danger",
+        "value": "#dc2626",
+        "core": true
+      },
+      {
+        "id": "c_ab12",
+        "name": "Crust",
+        "value": "#92400e"
+      }
+    ],
+    "fonts": [
+      {
+        "id": "heading",
+        "name": "Heading",
+        "family": "Fraunces",
+        "weight": 700,
+        "core": true
+      },
+      {
+        "id": "body",
+        "name": "Body",
+        "family": "DM Sans",
+        "weight": 400,
+        "core": true
+      }
+    ],
+    "logos": [
+      {
+        "id": "l_ab12",
+        "name": "Logo — on light",
+        "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAiIGhlaWdodD0iNDAiPjxyZWN0IHdpZHRoPSIxMjAiIGhlaWdodD0iNDAiIGZpbGw9IiMxZDRlZDgiLz48L3N2Zz4=",
+        "width": 120,
+        "height": 40
+      }
+    ],
+    "voice": {
+      "tagline": "Ship your best ideas, faster.",
+      "description": "A friendly product platform that helps small teams plan, build and launch without the busywork.",
+      "audience": "Founders, product managers and developers at startups and small software teams.",
+      "tone": [
+        "clear",
+        "confident",
+        "friendly",
+        "smart"
+      ],
+      "useWords": "ship, build, simple, fast, together, launch",
+      "avoidWords": "synergy, leverage, revolutionary, disrupt, best-in-class",
+      "sampleCopy": "Plan it, build it, ship it.\nFolio keeps your roadmap, docs and launches in one calm place — so your team spends less time updating tools and more time making things people love."
+    },
+    "style": {
+      "radius": {
+        "sm": 6,
+        "md": 12,
+        "lg": 24
+      },
+      "button": "rounded",
+      "density": "comfortable",
+      "shadow": "soft",
+      "gradients": [
+        {
+          "name": "Sunrise",
+          "fill": {
+            "type": "linear",
+            "angle": 135,
+            "stops": [
+              {
+                "color": "var(--color-primary)",
+                "pos": 0
+              },
+              {
+                "color": "var(--color-accent)",
+                "pos": 100
+              }
+            ],
+            "visible": true
+          }
+        },
+        {
+          "name": "Dough",
+          "fill": {
+            "type": "mesh",
+            "base": "var(--color-background)",
+            "spread": 60,
+            "points": [
+              {
+                "color": "var(--color-accent)",
+                "x": 12,
+                "y": 18
+              },
+              {
+                "color": "#fde68a",
+                "x": 88,
+                "y": 12
+              },
+              {
+                "color": "var(--color-primary)",
+                "x": 82,
+                "y": 88
+              },
+              {
+                "color": "#fdba74",
+                "x": 18,
+                "y": 82
+              }
+            ],
+            "visible": true
+          }
+        }
+      ]
+    }
+  },
+  "roots": [
+    "n_ndnp5ti"
+  ],
+  "page": "p_06xu7w"
+}

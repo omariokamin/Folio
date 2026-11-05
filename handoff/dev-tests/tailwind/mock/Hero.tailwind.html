@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hero</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@100..1000&amp;family=Fraunces:wght@100..900&amp;display=swap">
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.3"></script>
+  <style type="text/tailwindcss">
+@import "tailwindcss";
+
+@theme static {
+  --color-primary: #0f5c63;
+  --color-on-primary: #f4efe6;
+  --color-text: #1d2a2e;
+  --color-muted: #5f6f73;
+  --font-heading: "Fraunces", Georgia, serif;
+  --font-body: "DM Sans", system-ui, sans-serif;
+  --radius-lg: 28px;
+}
+
+/* preview page only: centre the artboard on a grey page */
+@layer base {
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  min-height: 100vh;
+  display: flex;
+  background: #e9e9ec;
+  -webkit-font-smoothing: antialiased;
+}
+/* the artboard: centered when it fits, scrollable when it doesn't */
+body > :first-child { margin: auto; flex-shrink: 0; }
+h1, h2, h3, p { margin: 0; }
+img { display: block; max-width: none; }
+}
+  </style>
+</head>
+<body>
+  <div class="relative w-180 h-auto flex flex-col gap-6 items-start p-14 rounded-lg overflow-hidden" style="background-image: radial-gradient(at 12% 18%, #00a3a0 0px, transparent 60%), radial-gradient(at 88% 12%, #7fdcc6 0px, transparent 60%), radial-gradient(at 82% 88%, #f3e4b0 0px, transparent 60%), radial-gradient(at 18% 82%, #1f6fae 0px, transparent 60%), linear-gradient(#dff5ee, #dff5ee); background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%; background-position: center, center, center, center, center; background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;">
+    <p class="relative shrink-0 w-max h-auto m-0 font-body text-xs font-semibold leading-[1.4] tracking-[0.12em] text-primary whitespace-pre-wrap [overflow-wrap:break-word]">SMALL-BATCH ROASTERY</p>
+    <h1 class="relative shrink-0 self-stretch w-auto h-auto m-0 font-heading text-5xl font-semibold leading-[1.1] text-text whitespace-pre-wrap [overflow-wrap:break-word]">Coffee roasted on the coast, at your door by Friday.</h1>
+    <p class="relative shrink-0 self-stretch w-auto h-auto m-0 font-body text-lg font-normal leading-[1.5] text-muted whitespace-pre-wrap [overflow-wrap:break-word]">Fresh beans every two weeks. Pause or skip whenever you like.</p>
+    <div class="relative shrink-0 w-fit h-auto flex flex-row gap-3 items-start">
+      <div class="relative shrink-0 w-fit h-auto flex flex-col items-start py-3.5 px-6 bg-primary rounded-full">
+        <p class="relative shrink-0 w-max h-auto m-0 font-body text-base font-semibold leading-[1.4] text-on-primary whitespace-pre-wrap [overflow-wrap:break-word]">Start a subscription</p>
+      </div>
+      <div class="relative shrink-0 w-fit h-auto flex flex-col items-start py-3.5 px-6 rounded-full border border-[#ffffff59] shadow-[inset_0px_1px_0px_0px_#ffffff80,inset_0px_-1px_0px_0px_#ffffff1a,0px_8px_32px_-8px_#0f172a2e] backdrop-blur-[24px] backdrop-saturate-180" style="background-image: linear-gradient(160deg, #ffffff47 0%, #ffffff14 100%); background-size: 100% 100%; background-position: center; background-repeat: no-repeat;">
+        <p class="relative shrink-0 w-max h-auto m-0 font-body text-base font-semibold leading-[1.4] text-text whitespace-pre-wrap [overflow-wrap:break-word]">See the beans</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
