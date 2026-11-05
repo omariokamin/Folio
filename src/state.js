@@ -511,6 +511,11 @@ window.Folio = window.Folio || {};
       if (p.viewport) copy.viewport = clone(p.viewport);
       const trees = p.roots.map((r) => this.toTree(r));
       this.withPage(copy.id, () => trees.forEach((t) => this.buildFromTree(t)));
+      // prototype links point at this page's artboards: re-point them (and the start screen) at the copies
+      const map = {};
+      p.roots.forEach((id, i) => (map[id] = copy.roots[i]));
+      if (map[p.start]) copy.start = map[p.start];
+      copy.roots.forEach((r) => [r, ...this.descendants(r)].forEach((id) => (this.get(id).interactions || []).forEach((it) => map[it.target] && (it.target = map[it.target]))));
       return copy;
     },
     /** Show another page: remembers this page's viewport, clears the selection, emits 'page' then 'change'. */

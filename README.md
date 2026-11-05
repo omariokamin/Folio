@@ -99,6 +99,10 @@ The full step-by-step guide, including troubleshooting, is in
 - **Tailwind export:** the **Tailwind** tab in the code panel (and **Export → Tailwind**) turns any layer
   into Tailwind CSS v4 classes, as HTML or a React component, with an `@theme` block for your brand
   tokens. Exact values: `p-4` for 16px, `p-[17px]` when no class matches; gradients stay inline styles.
+- **Prototyping:** wire buttons to other artboards (navigate, back, open link, overlays) with instant,
+  dissolve or slide transitions, make frames scroll, and press **Play** (▶, `⌥⌘↵`) to click through the
+  page full-screen. A `State=Hover` variant shows on hover. **Export → Prototype (HTML)** saves one file
+  that plays anywhere, even opened straight from disk.
 - **Undo / redo**, copy / paste, duplicate, autosave, and save/open `.folio.json` files.
 - **Import HTML:** **File → Import HTML…** turns pasted code or an `.html` file into editable layers
   with auto layout, and `⇧⌘V` pastes a selection copied from a website as layers. Scripts in the
@@ -180,6 +184,7 @@ the full list.
 | Zoom to 100% | `⌘0` |
 | Zoom in / out | `⌘+` / `⌘-` (or `⌘`/`Ctrl` + scroll) |
 | Toggle code panel | `⌘E` |
+| Play prototype (`Esc` exits) | `⌥⌘↵` |
 | Previous / next page | `⌥↑` / `⌥↓` (or `Alt+PageUp` / `Alt+PageDown`) |
 | Save to file / Open file | `⌘S` / `⌘O` |
 | Show all shortcuts | `?` |
@@ -228,6 +233,7 @@ adds its piece to a single global object, `window.Folio`.
 | `src/toolbar.js` | The top bar: File menu, tools, undo/redo, zoom, Code and Export buttons. Also the shared dropdown menu. |
 | `src/export.js` | Generates HTML/CSS, the standalone page and PNGs; saves/opens files; the code panel. |
 | `src/tailwind.js` | Turns the same CSS into Tailwind classes (HTML or React) plus the `@theme` block. |
+| `src/prototype.js` | Prototypes: checks interactions, builds the playable one-file HTML and runs the Play mode. |
 | `src/shortcuts.js` | All keyboard shortcuts and the shortcuts help window. |
 | `src/demo.js` | Builds the starter document. A good example of how designs are described. |
 | `src/brand.js` | Brand kits: the library, the active brand, and the CSS variables (`--color-primary`, …) that link layers to it. |

@@ -1,1 +1,92 @@
-/* prototype.css — placeholder, filled by the editor agent */
+/*
+ * prototype.css — the Prototype tab (#prototype-panel, built on the inspector's .ins styles)
+ * and the prototype arrows / start flag / connect handle drawn in #canvas-overlay.
+ */
+
+#prototype-panel[hidden] { display: none !important; }
+
+/* ---------- panel ---------- */
+.pp-sec__title { margin: 0; font: 600 11px/24px var(--font); color: var(--text); letter-spacing: .01em; }
+.pp-hint { line-height: 1.45; }
+.pp-hint + .pp-add, .ins-editor + .pp-add { margin-top: 8px; }
+.pp .f-row + .pp-hint { margin-top: 8px; }
+.pp-label { width: 62px; flex-shrink: 0; white-space: nowrap; }
+.pp-label--wide { width: 76px; }
+.pp-header__name {
+  flex: 1 1 0; min-width: 0; font-weight: 600; font-size: 12px; padding: 0 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pp-seg { flex: 1 1 0; min-width: 0; }
+.pp-seg > button { font-size: 11px; min-width: 0; }
+.pp-seg > button .f-icon { width: 13px; height: 13px; }
+.pp-seg > button[aria-pressed='true'] { color: var(--text); }
+.pp-add { width: 100%; color: var(--text-2); }
+.pp-add:hover { color: var(--text); }
+.pp-add .f-icon { width: 13px; height: 13px; }
+.pp-play { flex: 1 1 0; gap: 6px; font-weight: 600; }
+.pp-play:disabled { opacity: .4; cursor: default; background: var(--accent); }
+.pp-dur { flex: 1 1 0; }
+.pp-url { font-family: var(--mono); font-size: 10.5px !important; user-select: text; }
+
+/* one interaction */
+.pp-item + .pp-item { margin-top: 6px; }
+.pp-item { margin-top: 0; }
+.pp-item__head { display: flex; align-items: center; justify-content: space-between; height: 22px; margin: -2px -2px 6px 0; }
+.pp-item__on { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); }
+.pp .pp-item__rm.f-btn--icon { width: 22px; height: 22px; }
+.pp .f-select.is-missing { color: var(--danger); background-color: rgba(242, 85, 90, .1); }
+
+.pp-check { display: flex; align-items: center; gap: 8px; min-height: 24px; color: var(--text-2); cursor: pointer; }
+.pp-check:hover { color: var(--text); }
+.pp-check.is-disabled { cursor: default; color: var(--text-2); }
+.pp-check__box { margin: 0; width: 14px; height: 14px; accent-color: var(--accent); color-scheme: dark; cursor: inherit; flex-shrink: 0; }
+
+/* flow summary */
+.pp-flow__count { margin-bottom: 8px; }
+.pp-flow__group + .pp-flow__group { margin-top: 10px; }
+.pp-flow__screen {
+  display: flex; align-items: center; gap: 6px; height: 20px; margin-bottom: 2px;
+  font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3);
+}
+.pp-flow__screen > span:first-child { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pp-badge {
+  flex-shrink: 0; height: 16px; padding: 0 6px; border-radius: 8px; background: var(--accent-soft); color: var(--accent-2);
+  font: 600 9.5px/16px var(--font); letter-spacing: .04em;
+}
+.pp-flow__row {
+  width: calc(100% + 12px); height: 26px; margin: 0 -6px; padding: 0 6px; display: flex; align-items: center; gap: 8px;
+  background: none; border: 0; border-radius: var(--radius); color: var(--text); font: inherit; font-size: 11px; cursor: pointer; text-align: left;
+}
+.pp-flow__row:hover { background: var(--panel-2); }
+.pp-flow__row:focus-visible, .pp-check__box:focus-visible + span { outline: 1px solid var(--accent); outline-offset: 1px; }
+.pp-flow__src { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pp-flow__dst { flex: 0 1 auto; max-width: 55%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--accent-2); }
+.pp-flow__dst.is-missing { color: var(--danger); }
+
+/* ---------- canvas layer (screen space) ---------- */
+#canvas-overlay > .pp-arrows {
+  position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 2;
+}
+.pp-arrow { color: var(--accent); }
+.pp-arrow .pp-line { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
+.pp-arrow circle, .pp-arrow .pp-tip { fill: currentColor; }
+.pp-arrow.is-overlay .pp-line { stroke-dasharray: 5 4; }
+.pp-arrow.is-faint { opacity: .28; }
+.pp-arrow.is-hot .pp-line { stroke-width: 2; }
+.pp-arrow.is-live .pp-line { stroke-dasharray: none; }
+.pp-drop { fill: rgba(109, 94, 252, .08); stroke: var(--accent); stroke-width: 2; }
+
+#canvas-overlay > .pp-flag {
+  z-index: 6; height: 18px; padding: 0 7px 0 5px; display: flex; align-items: center; gap: 3px;
+  border-radius: 4px; background: var(--accent); color: #fff; font: 600 10.5px/18px var(--font); white-space: nowrap;
+  transform-origin: 0 0; pointer-events: none;
+}
+.pp-flag .f-icon { width: 10px; height: 10px; }
+
+#canvas-overlay > .pp-handle {
+  z-index: 9; width: 14px; height: 14px; border-radius: 50%;
+  background: #fff; border: 2px solid var(--accent); box-shadow: 0 1px 3px rgba(0, 0, 0, .25);
+  pointer-events: auto; cursor: grab; transform-origin: 0 0;
+}
+#canvas-overlay > .pp-handle::after { content: ''; position: absolute; inset: -5px; border-radius: 50%; }
+#canvas-overlay > .pp-handle:hover, #canvas-overlay > .pp-handle.is-dragging { background: var(--accent); }

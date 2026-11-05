@@ -206,6 +206,8 @@ window.Folio = window.Folio || {};
     tailwind: (react) => exporter() && exporter().downloadTailwind(null, react),
     copy: () => exporter() && exporter().copyCode(),
     code: () => store().emit('code:toggle'),
+    play: () => Folio.prototype && Folio.prototype.play && Folio.prototype.play(),
+    prototype: () => Folio.prototype && Folio.prototype.downloadFile && Folio.prototype.downloadFile(),
     help: () => Folio.shortcuts && Folio.shortcuts.showHelp && Folio.shortcuts.showHelp(),
   };
 
@@ -248,6 +250,7 @@ window.Folio = window.Folio || {};
         { label: 'HTML page (.html)', icon: 'download', action: act.page },
         { label: 'Tailwind (HTML)', icon: 'download', action: () => act.tailwind(false) },
         { label: 'Tailwind (React)', icon: 'download', action: () => act.tailwind(true) },
+        { label: 'Prototype (HTML)', icon: 'play', action: act.prototype },
         { label: 'Copy HTML + CSS', icon: 'copy', action: act.copy },
         { label: 'View code', icon: 'code', shortcut: fmt('mod+e'), action: act.code },
       ],
@@ -360,6 +363,11 @@ window.Folio = window.Folio || {};
       icon('code'),
       h('span', {}, 'Code')
     );
+    el.play = btn(
+      { class: 'tb-code tb-play', 'aria-label': 'Play prototype', 'data-tip': `Play prototype  ${fmt('alt+mod+enter')}`, onclick: act.play },
+      icon('play'),
+      h('span', {}, 'Play')
+    );
     el.exportBtn = btn(
       { class: 'f-btn f-btn--primary tb-export', 'data-tip': 'Export PNG / HTML', onclick: (e) => exportMenu(e.currentTarget) },
       h('span', {}, 'Export'),
@@ -373,6 +381,7 @@ window.Folio = window.Folio || {};
       h('span', { class: 'tb-sep' }),
       el.zoom,
       el.code,
+      el.play,
       el.exportBtn
     );
 

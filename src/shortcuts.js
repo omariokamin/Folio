@@ -405,6 +405,7 @@ window.Folio = window.Folio || {};
         ['mod++', 'Zoom in'],
         ['mod+-', 'Zoom out'],
         ['mod+e', 'Toggle code panel'],
+        ['alt+mod+enter', 'Play prototype'],
       ],
     },
     {
@@ -492,6 +493,7 @@ window.Folio = window.Folio || {};
     if (mod) {
       if (e.altKey && code === 'KeyK') return run(actions.createComponent);
       if (e.altKey && code === 'KeyB') return run(actions.detachInstance);
+      if (e.altKey && (key === 'Enter' || code === 'NumpadEnter')) return run(() => Folio.prototype && Folio.prototype.play());
       if (code === 'KeyZ' || lower === 'z') return run(e.shiftKey ? actions.redo : actions.undo);
       if (code === 'KeyY' || lower === 'y') return run(actions.redo);
       if (code === 'KeyD' || lower === 'd') return run(actions.duplicate);

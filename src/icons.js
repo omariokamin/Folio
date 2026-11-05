@@ -16,6 +16,7 @@ window.Folio = window.Folio || {};
     image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>',
     undo: '<path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 010 10h-3"/>',
     redo: '<path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 000 10h3"/>',
+    play: '<path d="M7 5l12 7-12 7z"/>',
     code: '<path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/>',
     download: '<path d="M12 4v11M7 10l5 5 5-5M4 20h16"/>',
     upload: '<path d="M12 20V9M7 14l5-5 5 5M4 4h16"/>',

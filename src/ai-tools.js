@@ -4112,8 +4112,7 @@ window.Folio = window.Folio || {};
   /** The page's start screen: page.start when it is still one of its artboards, else the first artboard. */
   function startLine(page) {
     const store = S();
-    const ids = page.roots.filter((id) => store.get(id));
-    const id = ids.includes(page.start) ? page.start : ids[0];
+    const id = Folio.prototype && Folio.prototype.startOf ? Folio.prototype.startOf(page.id) : page.roots[0];
     return id ? `${id} ${q(store.get(id).name)}${id === page.start ? '' : ' (the first artboard)'}` : null;
   }
 
@@ -4157,7 +4156,8 @@ window.Folio = window.Folio || {};
       if (boards.length && list.some((it) => isObj(it) && (it.action === 'navigate' || it.action === 'overlay') && !boards.some((b) => b.id === it.target)))
         warnings.push(`Artboards on this page: ${boards.slice(0, 20).map((b) => boardLine(b.id)).join('; ')}.`);
       if (list.length && !res.interactions.length) return fail(`No valid interaction, so nothing was changed. ${warnings.join(' ')}`, 'No valid interaction');
-      patch.interactions = res.interactions.length ? res.interactions : undefined;
+      // an instance root without the key would inherit the main's clicks on the next propagation
+      patch.interactions = res.interactions.length || (sc && sc.root) ? res.interactions : undefined;
     }
     if (Object.keys(patch).length) store.update(node.id, patch);
     if (has('start')) {
