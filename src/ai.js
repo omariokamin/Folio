@@ -191,7 +191,7 @@ window.Folio = window.Folio || {};
   let changingKey = false;
 
   // DOM refs
-  let panel, rightPanel, inspectorEl, tabsEl, tabDesign, tabAi;
+  let panel, rightPanel, inspectorEl, tabsEl, tabDesign, tabProto, tabAi;
   let headModelBtn, newChatBtn, settingsBtn, pop;
   let body, log, keyCard, composer, ctxRow, attachRow, textarea, sendBtn, attachBtn, fileInput, dropOverlay;
 
@@ -202,6 +202,9 @@ window.Folio = window.Folio || {};
     tabsEl.replaceChildren();
     tabsEl.setAttribute('role', 'tablist');
     tabDesign = h('button', { class: 'ai-tab', role: 'tab', type: 'button', onClick: () => setTab('design') }, 'Design');
+    tabProto = Folio.prototypePanel
+      ? h('button', { class: 'ai-tab', role: 'tab', type: 'button', dataset: { tab: 'prototype' }, title: 'Connect screens and play them', onClick: () => setTab('prototype') }, 'Prototype')
+      : null;
     tabAi = h(
       'button',
       { class: 'ai-tab', role: 'tab', type: 'button', title: 'AI designer (⌘K / Ctrl+K)', onClick: () => setTab('ai') },
@@ -209,7 +212,7 @@ window.Folio = window.Folio || {};
       'AI',
       h('i', { class: 'ai-tab__dot' })
     );
-    tabsEl.append(tabDesign, tabAi);
+    tabsEl.append(...[tabDesign, tabProto, tabAi].filter(Boolean));
   }
 
   function currentTab() {
@@ -217,25 +220,34 @@ window.Folio = window.Folio || {};
   }
 
   function setTab(tab, { remember = true } = {}) {
+    if (tab === 'prototype' && !tabProto) tab = 'design';
     const ai = tab === 'ai';
+    const protoEl = document.getElementById('prototype-panel');
     if (panel) panel.hidden = !ai;
-    if (inspectorEl) inspectorEl.hidden = ai;
+    if (inspectorEl) inspectorEl.hidden = tab !== 'design';
+    if (protoEl) protoEl.hidden = tab !== 'prototype';
     if (rightPanel) rightPanel.classList.toggle('is-ai', ai);
-    tabDesign.classList.toggle('is-active', !ai);
-    tabAi.classList.toggle('is-active', ai);
-    tabDesign.setAttribute('aria-selected', String(!ai));
-    tabAi.setAttribute('aria-selected', String(ai));
-    if (remember) storageSet('localStorage', TAB_STORAGE, ai ? 'ai' : 'design');
+    [[tabDesign, 'design'], [tabProto, 'prototype'], [tabAi, 'ai']].forEach(([b, t]) => {
+      if (!b) return;
+      b.classList.toggle('is-active', t === tab);
+      b.setAttribute('aria-selected', String(t === tab));
+    });
+    if (remember) storageSet('localStorage', TAB_STORAGE, tab);
     if (ai) {
       updateContextChip();
       scrollToEnd(true);
     } else {
       closePop();
-      if (Folio.inspector && Folio.inspector.refresh) {
+      if (tab === 'design' && Folio.inspector && Folio.inspector.refresh) {
         try {
           Folio.inspector.refresh();
         } catch (e) {}
       }
+    }
+    if (Folio.prototypePanel && Folio.prototypePanel.refresh) {
+      try {
+        Folio.prototypePanel.refresh();
+      } catch (e) {}
     }
   }
 
@@ -1517,7 +1529,7 @@ window.Folio = window.Folio || {};
     });
     body.addEventListener('scroll', () => (stick = isNearBottom()), { passive: true });
     const saved = storageGet('localStorage', TAB_STORAGE);
-    setTab(saved === 'ai' ? 'ai' : 'design', { remember: false });
+    setTab(saved === 'ai' || saved === 'prototype' ? saved : 'design', { remember: false });
   }
 
   Folio.ai = {

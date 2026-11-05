@@ -363,7 +363,9 @@ window.Folio = window.Folio || {};
     }
 
     end();
+    // prototype arrows, start flag and connect handle (prototype-panel.js; only while its tab is open)
+    if (Folio.prototypePanel && Folio.prototypePanel.draw) Folio.prototypePanel.draw(sbox);
   }
 
-  Folio.overlay = { init, update, schedule, setGuides, guides };
+  Folio.overlay ={ init, update, schedule, setGuides, guides };
 })();
