@@ -139,14 +139,17 @@ names identifiers, MIME types and hosts only.
     tree.
   - Vector-type nodes (VECTOR, BOOLEAN_OPERATION, ELLIPSE, STAR, REGULAR_POLYGON, LINE) keep their
     `fillGeometry`, `strokeGeometry`, `vectorData`, `arcData` and `booleanOperation`. Simple shapes are
-    flattened where possible. Component properties and variable modes are resolved.
+    flattened where possible, and component properties and variable modes are resolved (**inferred** from the type sets and `activeModes`/prop-alias handling; the passes were not read in detail).
   - **The tree is then converted to HTML (`to-html-*.js`) and fed into the same HTML importer.** Figma
-    import is therefore "Figma → HTML → Paper nodes".
+    import is therefore "Figma → HTML → Paper nodes". The conversion through `toHTML` is **confirmed**. That
+    the result goes through the *same* importer as plain HTML paste is **inferred**: the paste switch
+    sends Figma and HTML to different handler functions, and the Figma one was not read.
   - Image fills need a **Figma OAuth connection** ("Connect to Figma"). Desktop opens
     `…/figma-oauth/authorize` in the browser and receives `paper://figma-oauth/done|error`, after which
     the images are fetched (`resolve-images-*.js`). Without OAuth the paste works but the images are
-    missing. **Confirmed** (`main.cjs` deep-link parser plus the `open-figma-oauth` IPC; the UI says
-    "Pasting from Figma. Images will be fetched.").
+    missing. The OAuth flow is **confirmed** (`main.cjs` deep-link parser plus the `open-figma-oauth`
+    IPC; the UI says "Pasting from Figma. Images will be fetched."). What happens without OAuth is
+    **inferred** (only a cancel path and the toast text were seen).
   - The docs link `paper.design/docs/paste/figma` appears in the renderer.
 - **HTML import.** `code-import-*.js` turns DOM and CSS into Paper nodes. It covers flex and grid,
   logical margin/padding/inset, font features, line clamp, text stroke and fill, and form controls.
@@ -194,8 +197,8 @@ names identifiers, MIME types and hosts only.
      gradients rasterized, design tokens as CSS variables, and `@font-face` rules.
   2. Desktop writes each page to a temp file and loads it in a hidden window. It waits for
      `document.fonts.ready`, then runs `printToPDF` at the exact page size.
-  3. `pdf-lib` merges the pages, and an optional pass recompresses images (JPEG quality 0.92/0.8/… by
-     low/medium/high). There is also a "combined PDF" option (one page per node).
+  3. `pdf-lib` merges the pages, and an optional pass recompresses images (JPEG quality 0.92 for high,
+     0.8 for medium, lower for low). There is also a "combined PDF" option (one page per node).
   **Confirmed** (`main.cjs` `export-pdf` handler; `assets/pdf-*.js`).
 - **Video** (MP4 or WebM; plan-gated, "Export to video is available with …"): Paper puts the node's
   DOM inside an offscreen `<canvas layoutsubtree>`, which is Chromium's experimental **HTML-in-canvas**
@@ -245,7 +248,8 @@ names identifiers, MIME types and hosts only.
   JavaScript's `prototype`. The only "interaction" hits belong to an emoji picker. **Inferred absent**.
 - **File format and storage**: files live in the cloud. The renderer syncs over a WebSocket to
   `wss://sync.paper.design` and calls `api.paper.design`. File assets are served from
-  `app.paper.design/file-assets/…`, and the URL pattern is `/file/<team>/<project>/<file>`. If the
+  `app.paper.design/file-assets/…`, and file URLs have the shape `/file/<id>/<id>/<id>`. The first segment matches the team id; reading
+  the other two as project and file is **inferred**. If the
   connection fails, a "Download backup file" button saves the whole file state as
   `paper-file-<id>.json`. No local file format or `.paper` document type was seen; Desktop's
   "open files" means open tabs. **Confirmed** (`main-*.js`, `main.cjs`). That no local file format
