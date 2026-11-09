@@ -46,6 +46,8 @@ Annotations: **R** = `readOnlyHint`, **D** = `destructiveHint`. `delete_nodes` a
 
 ### Files and folders (the team file browser)
 
+Only `open_file` takes `fileId` here. The other seven tools work on the team and have no `fileId` parameter at all.
+
 | Tool | Inputs | What it does | Ann. |
 |---|---|---|---|
 | `open_file` | `fileId` (id or URL), `pageId?` | Opens a file as a desktop tab. `pageId` only counts on first open. Returns the same thing as `get_basic_info`. | R |
@@ -200,5 +202,5 @@ About 2,000 characters. In our words, the instructions say:
 - **`serverInfo.version` came back `0.0.1`**, while the HTTP server is built with the app version (0.5.18). We infer that the Go relay answers `initialize` itself and forwards only `tools/call`.
 - **The list may vary by state.** It was captured with Paper running. Whether a file was open was not checked. Whether the list changes with no file open, or differs on the remote server, is unconfirmed (the `export` and `export_combined_pdf` descriptions already show Desktop-only differences).
 - **The list is a snapshot.** Paper serves it from its web app, so it can change at any time without a desktop update.
-- **Side effect of the live check:** one short MCP session. Paper tracks each session as an agent and removes it on close. No document was opened, read or changed.
+- **Side effect of the live check:** one short MCP session. Paper tracks each session as an agent and removes it when the transport closes; we did not check whether the relay closed this session explicitly. No document was opened, read or changed.
 - **Not attempted:** headless mode, the remote MCP server, the Claude Desktop extension, and reading Paper's local HTTP cache.
