@@ -75,7 +75,9 @@ Two details that matter for round-trip and for real components:
   `box-sizing`), and so do real React + Tailwind projects. `@import "tailwindcss"` includes it (the probe's
   output contains `box-sizing: border-box`).
 
-Security note on T3. The compiler sees only class strings. Arbitrary values such as `bg-[url(https://…)]`
+Security note on T3. The compiler is third-party code loaded from jsDelivr into Folio's own origin, where the
+API key lives. Folio already trusts the same CDN for `html-to-image` and the Claude SDK, so this is an existing
+trust boundary, not a new one; pin the exact version. The compiler sees only class strings. Arbitrary values such as `bg-[url(https://…)]`
 can make the iframe fetch a URL. Today's importer already keeps `<link rel="stylesheet">` and inline styles
 (`src/import.js:23`), so this adds no new network exposure (not tested beyond reading the code; see
 Unconfirmed).
@@ -111,7 +113,7 @@ list and of the SVG attribute map):
   `fillRule`, …) need React's attribute map for inline `<svg>`.
 - `{"a\nb"}` is how Folio exports multi-line text (`src/tailwind.js` `jsxText`); keep the newline.
 
-## Evidence: proof of concept (scratch only, not committed as code)
+## Evidence: proof of concept (source quoted below for reference, not added to `src/`)
 
 Oracle: for every demo artboard, `jsx2html(Folio.tailwind.jsxFor(id))` must equal `Folio.tailwind.htmlFor(id)`
 (whitespace between tags ignored). Run in Node with the same harness as
