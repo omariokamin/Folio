@@ -100,9 +100,9 @@ pulsing-border, paper-texture, warp, smoke-ring, voronoi.
      renders and animates, both from `http://localhost` and from a page opened as `file://`
      (jsDelivr sends CORS headers).
   3. **Vendored files in the repo, loaded by relative path.** This works when the page is served over
-     HTTP (measured, served from localhost). It **fails from `file://`**, because module scripts
-     loaded by relative path are blocked there. Don't use it for exported files people open by
-     double-clicking.
+     HTTP (measured, served from localhost). It **fails from `file://`**: measured in Chromium, the
+     relative module import was "blocked by CORS policy" and no canvas appeared. Other browsers
+     weren't tested. Don't use it for exported files people open by double-clicking.
   4. **A one-time bundle into one IIFE file** (for example
      `esbuild --bundle --format=iife --global-name=PaperShaders`), committed to `vendor/`. This is a
      one-off conversion, not an app build step, but it does need a tool to run once and redo on
@@ -164,7 +164,8 @@ Image filters (they take an `image`), closer to an image effect than a fill:
 | lens-distortion | image?, spread, bias, angle, perspective, count, dispersion, dispersionShift, dispersionColor, focusCenter, focusEdges, swirl, noise, noiseFrequency, noiseOffset, lensBulge, lensCircle, grainMixer, grainOverlay, imageX, imageY |
 | heatmap | image (required), contour, angle, noise, innerGlow, outerGlow, colorBack, colors[] |
 
-Defaults: the vanilla package has no prop defaults. Defaults and presets live in the React wrapper.
+Defaults: the vanilla package exports only sizing defaults (`defaultObjectSizing`,
+`defaultPatternSizing`). Each shader's parameter defaults and presets live in the React wrapper.
 For example, the mesh gradient default is colors `#e0eaff #241d9a #f75092 #9f50d3`, distortion 0.8,
 swirl 0.1, grain 0, speed 1, with presets Default, Ink, Purple and Beach (measured,
 `@paper-design/shaders-react@0.0.82` `dist/shaders/mesh-gradient.js`).
@@ -229,8 +230,9 @@ with the same behaviour seen in the 0.0.82 dist.
   exportable as lightweight code"
   ([README](https://github.com/paper-design/shaders/blob/b6e6e7f73faf614f0c9f4e635451d4c3ed47bad0/README.md)).
   I didn't check what the Paper app's export produces.
-- No static fallback is offered anywhere. The image-based shaders use transparent and empty pixel
-  placeholders while images load, but nothing covers "no WebGL" or "no JS".
+- No static fallback is offered anywhere. The image-based shaders appear to use pixel placeholders
+  while images load (judging by the file names `empty-pixel` and `transparent-pixel`; not read), but
+  nothing covers "no WebGL" or "no JS".
 
 ## 7. How a Folio shader fill could run and export
 
