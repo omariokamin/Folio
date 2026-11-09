@@ -6,7 +6,7 @@ re-check the linked pages before building.
 **Short answer.** Three providers answer a browser page's CORS check (tested): **Google Gemini
 (Nano Banana)**, **fal.ai** and **OpenAI**. Gemini and fal return CORS headers even on error responses.
 OpenAI passes the preflight but leaves CORS headers off its image-route error responses. **Replicate**,
-**Black Forest Labs** and **BytePlus (Seedream)** block browser calls. All six work from the Node bridge,
+**Black Forest Labs** and **BytePlus (Seedream)** block browser calls. All of them, Volcengine included, work from the Node bridge,
 because CORS only applies in browsers. Recommendation: put image generation in the bridge (like
 `import_url`), with a browser-direct fallback for Gemini and fal in the in-app chat.
 
@@ -51,10 +51,10 @@ There are three separate checks:
 | Provider | Models (ids) | Sizes | Price per image (USD) | Edit / inpaint |
 |---|---|---|---|---|
 | OpenAI | `gpt-image-2.6-flare`, `gpt-image-2.6-sunburst`, `gpt-image-2.5-flare`, `gpt-image-2.5-sunburst`, `gpt-image-2`, `gpt-image-1.5`, `gpt-image-1-mini` (`gpt-image-1` shut down 2026-10-23) | 1024×1024, 1536×1024, 1024×1536 recommended; custom sizes in multiples of 16, ratio 1:3 to 3:1, max edge 3840, 655,360 to 8,294,400 pixels | 2.5 / 2.6: token-billed, $30 per 1M image output tokens (no per-image table found). Legacy per-image prices at 1024²: gpt-image-2 low $0.006 / medium $0.053 / high $0.211; gpt-image-1.5 $0.009 / $0.034 / $0.133; 1-mini $0.005 / $0.011 / $0.036 | Yes: `/v1/images/edits`, several reference images, prompt-based mask on the first image (needs an alpha channel, <50 MB), "markup" edits on 2.5 / 2.6. Also outputs PNG / JPEG / WebP, transparent background, SVG and GIF |
-| Gemini | `gemini-3-pro-image` (Nano Banana Pro), `gemini-3.1-flash-image` (Nano Banana 2), `gemini-nano-banana-2.1`, `gemini-3.1-flash-lite-image`, `gemini-2.5-flash-image` (deprecated, shuts down 2027-03-15). Imagen is listed as "legacy … (shut down)" | 1K / 2K / 4K (uppercase K), 512px on 3.1 Flash only; ratios such as 1:1, 5:4, 16:9 (plus 1:4, 4:1, 1:8, 8:1 on 2.1 / 3.1 Flash) | Pro: $0.134 (1K–2K), $0.24 (4K). 3.1 Flash: $0.045 (0.5K), $0.067 (1K), $0.101 (2K), $0.151 (4K). 2.1: $0.0336 / $0.0504 / $0.113. Flash-lite $0.0336 (1K). 2.5 Flash $0.039. No free tier for image output | Yes: text-plus-image editing, multi-turn editing, up to 14 reference images. No mask. Every image carries a SynthID watermark |
+| Gemini | `gemini-3-pro-image` (Nano Banana Pro), `gemini-3.1-flash-image` (Nano Banana 2), `gemini-nano-banana-2.1`, `gemini-3.1-flash-lite-image`, `gemini-2.5-flash-image` (deprecated, shuts down 2027-03-15). Imagen is listed as "legacy … (shut down)" | 1K / 2K / 4K (uppercase K), 512px on 3.1 Flash only; ratios such as 1:1, 5:4, 16:9 (plus 1:4, 4:1, 1:8, 8:1 on 2.1 / 3.1 Flash) | Pro: $0.134 (1K–2K), $0.24 (4K). 3.1 Flash: $0.045 (0.5K), $0.067 (1K), $0.101 (2K), $0.151 (4K). 2.1: $0.0336 / $0.0504 / $0.113. Flash-lite $0.0336 (1K). 2.5 Flash $0.039. No free tier for image output | Yes: text-plus-image editing, multi-turn editing, up to 14 reference images. No mask parameter in the docs I read. Every image carries a SynthID watermark |
 | fal.ai | Hosts many models: `fal-ai/flux-2`, `fal-ai/nano-banana-pro` (+ `/edit`), `fal-ai/bytedance/seedream/v4.5/text-to-image`, and others | Per model | flux-2 $0.012 per megapixel; nano-banana-pro $0.15 (4K $0.30); Seedream 4.5 $0.04 | Per model (edit endpoints exist for Nano Banana Pro, FLUX.2, Seedream) |
 | Replicate | Hosts many models, e.g. `black-forest-labs/flux-2-pro` | Per model (flux-2-pro: inputs up to 9 MP, edits up to 4 MP) | Not found on the model page (see Unconfirmed) | Per model |
-| BFL | FLUX 3 Image, FLUX 3 Klein, FLUX.2 [pro] / [flex] / [max] / [klein], Kontext [pro] / [max] | `resolution` `768sq`, `1k`, `1.5k`, `2k`, `4k`, or width / height 256 to 6256 | At 1 MP: FLUX 3 $0.048, FLUX 3 Klein $0.009, FLUX.2 pro $0.03 (edit $0.045), flex $0.05 ($0.10), max $0.07 ($0.10), klein 9B $0.015, Kontext pro $0.04, max $0.08 | Yes: `images` field takes 1 to 10 reference images (URL or base64). No mask on FLUX 3 |
+| BFL | FLUX 3 Image, FLUX 3 Klein, FLUX.2 [pro] / [flex] / [max] / [klein], Kontext [pro] / [max] | `resolution` `768sq`, `1k`, `1.5k`, `2k`, `4k`, or width / height 256 to 6256 | At 1 MP: FLUX 3 $0.048, FLUX 3 Klein $0.009, FLUX.2 pro $0.03 (edit $0.045), flex $0.05 ($0.10), max $0.07 ($0.10), klein 9B $0.015, Kontext pro $0.04, max $0.08 | Yes: `images` field takes 1 to 10 reference images (URL or base64). No mask parameter in the FLUX 3 API reference |
 | Seedream | `doubao-seedream-5-0-260128`, `doubao-seedream-5-0-lite-260128`, `doubao-seedream-4-5-251128`, `doubao-seedream-4-0-250828` (Volcengine ids; BytePlus ids not confirmed) | 4.5: 2K / 4K or W×H, 2560×1440 to 4096×4096 pixels, ratio 1:16 to 16:1 | Official price not found. Resellers charge about $0.04 (fal, OpenRouter) | Yes: up to 14 reference images, image sets (`sequential_image_generation`), optional "AI-generated" watermark |
 
 ## Provider notes
@@ -117,8 +117,11 @@ per week" ([pricing](https://paper.design/pricing)). Paper's subprocessor list n
 **OpenAI** ("Image generation and editing"), **Replicate** ("Image generation"), **xAI**, **Recraft** and
 **Quiver AI** (SVG), with Cloudflare Workers / R2 and Fly.io for hosting
 ([subprocessors](https://paper.design/legal/subprocessors)). fal, BFL, Google and ByteDance are not on
-that list. Flux 2, Nano Banana Pro and Seedream 4.5 are all on Replicate, so Paper most likely calls them
-through Replicate. That is an inference; Paper doesn't say so. The changelog dates these models to
+that list. Replicate hosts all three of those models: the pages
+[black-forest-labs/flux-2-pro](https://replicate.com/black-forest-labs/flux-2-pro),
+[google/nano-banana-pro](https://replicate.com/google/nano-banana-pro) and
+[bytedance/seedream-4.5](https://replicate.com/bytedance/seedream-4.5) each returned 200. So Paper most likely
+calls them through Replicate. That is an inference; Paper doesn't say so. The changelog dates these models to
 2025-12-19, with later updates in 2026 (GPT Image 2, Nano Banana 2 / 2.1, xAI, image generation over MCP)
 ([build log](https://paper.design/build-log)).
 
@@ -137,11 +140,11 @@ through Replicate. That is an inference; Paper doesn't say so. The changelog dat
 3. **Always store the image, never the provider URL.** Turn every result into a data URL, but first
    **downscale and re-encode** it. Use the brand logo path as the model: longest side 1024 px, at most
    1.5 MB (`LOGO_MAX_BYTES` in `src/brand.js`), saved as WebP or JPEG. This matters because `image.src`
-   data URLs autosave into localStorage (`folio:autosave:v1`). A 1024² PNG is roughly 1.5 to 4 MB as
-   base64, and browsers allow about 5 MB per origin, so two raw results already trigger the "Autosave failed
+   data URLs autosave into localStorage (`folio:autosave:v1`). A full-size PNG can be several MB as
+   base64 (estimate, not measured), and browsers allow about 5 MB per origin, so a couple of raw results can trigger the "Autosave failed
    (file too large — large images?)" toast in `state.js`. Moving autosave to IndexedDB would fix this
    properly, but that's out of scope here.
-4. **Default provider: Gemini.** It is the only option that is browser-safe, needs one key, and offers
+4. **Default provider: Gemini.** It is the simplest first-party option that is browser-safe, needs one key, and offers
    editing with reference images, at $0.034 to $0.134 per image. fal is the "many models, one key" choice,
    and it covers the Paper lineup.
 
