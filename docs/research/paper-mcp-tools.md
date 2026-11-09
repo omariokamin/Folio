@@ -25,7 +25,7 @@ Sources (cited below by tag):
 | P-README | https://github.com/paper-design/agent-plugins/blob/main/plugins/paper-desktop/README.md |
 | P-REMOTE | https://github.com/paper-design/agent-plugins/blob/main/plugins/paper/README.md (hosted server `https://mcp.paper.design`, OAuth) |
 | P-MANIFEST | https://github.com/paper-design/agent-plugins/blob/main/claude-extensions/paper-desktop/manifest.json (`tools_generated: true`) |
-| P-OLD | https://github.com/paper-design/agent-plugins/commit/7f69728b (early manifest naming `get_basic_info` with description) |
+| P-OLD | https://github.com/paper-design/agent-plugins/commit/7f69728bb7447f3488682409d49f99e10db55cda (early manifest naming `get_basic_info` with description) |
 | WEBMCP | https://github.com/paper-design/webmcp-agent-example (README and `app/api/chat/route.ts`) |
 | BUNDLE | https://app.paper.design/assets/MCPHandlers-Bc1Lc3DD.js (Tier 2) |
 
@@ -163,6 +163,7 @@ Folio's definitions are in `src/ai-prompt.js` (21 tools, `get_document` through 
 | Brand kit beyond tokens: voice, logos, style rules (button shape, density, shadow), templates, library kits | `get_brand`, `set_brand` |
 | Logo designer with sanitized SVG, preview cards and light, dark, mono and metal versions | `draft_logo`, `save_logo` |
 | Import a live URL | `import_url` |
+| Import HTML straight into a new artboard in one call (Paper needs `create_artboard` first) | `import_html` |
 | Import HTML that uses `<style>` and class CSS, a CSS `selector` and a viewport `width` | `import_html` |
 | Prototyping: navigate, overlay, back, links, scroll, start screen | `set_interactions` |
 | Delete pages and switch the user's view | `manage_pages` |
@@ -173,11 +174,11 @@ Folio's definitions are in `src/ai-prompt.js` (21 tools, `get_document` through 
 ## Unconfirmed
 
 - **The 41-tool list itself** comes from the public web bundle (Tier 2), not from docs or packages. Unconfirmed: see the app scan (`research/paper-app-mcp-scan`).
-- **The tool count differs between sources.** The bundle has 41 tools. The third-party proxy's README shows `doctor` reporting "36 tools available". The difference may be feature flags, versions or Desktop-only tools. Unconfirmed: see the app scan.
+- **The tool count differs between sources.** The bundle has 41 tools. The third-party proxy's README shows `doctor` reporting "36 tools available". The registry code has gating in two places: a feature-flag check (`de("tokens_library_publish")`) and a server-mode check (`we() === "remote_agent"`). It also has a `scope` (`app` or `file`) on each tool. So the Desktop CLI may serve a smaller set. Unconfirmed: see the app scan.
 - **How the "working on" indicator is switched on.** There is no `start_working_on_nodes` tool, and only the release side is a tool. Whether write tools set the indicator automatically is not shown in the sources. Unconfirmed: see the app scan.
 - **The hosted server's tool list.** `https://mcp.paper.design` returns 401 without OAuth. The `export` description mentions "Paper's remote MCP server", which suggests the same registry. Unconfirmed.
 - **Inputs not extracted** for `export_combined_pdf`. `get_selection` appears to take only `fileId`.
 - **The `get_guide` topic list.** Four topics were found; others may be gated.
 - **Inline SVG in `write_html`** as a way for agents to make logos is inferred from the "use SVG icons" guidance, not stated as a tool feature.
-- **`host_control_ping`** (WEBMCP) is not in the bundle registry. It may be specific to WebMCP or the host.
+- **`host_control_ping`** (WEBMCP) was not found in any of the 31 editor chunks downloaded. It may be in a chunk that was not fetched, or it may be WebMCP host plumbing.
 - Two third-party npm packages (`paper-remote-mcp`, `@try-works/dsh-paper-design`) were used only to find sources. None of their claims are relied on.
